@@ -1,0 +1,38 @@
+{
+    "name": "lawsuit-search-orchestrator",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test-search": "tsx src/scripts/testSearch.ts",
+        "test-answer": "tsx src/scripts/testAnswer.ts",
+        "review:logs": "tsx scripts/reviewSearchLogs.ts",
+        "dev": "tsx src/server.ts",
+        "eval:run": "tsx src/scripts/runEval.ts",
+        "eval:seed": "tsx src/scripts/runEval.ts eval/cases.seed.json"
+    },
+    "dependencies": {
+        "@prisma/adapter-mariadb": "^7.5.0",
+        "@prisma/client": "^7.5.0",
+        "@qdrant/js-client-rest": "^1.15.0",
+        "bcryptjs": "^3.0.3",
+        "compression": "^1.8.1",
+        "cookie-parser": "^1.4.7",
+        "cors": "^2.8.6",
+        "dotenv": "^16.6.1",
+        "express": "^5.2.1",
+        "mssql": "^12.2.1",
+        "openai": "^6.29.0"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/node": "^22.10.1",
+        "prisma": "^7.5.0",
+        "tsx": "^4.19.2",
+        "typescript": "^5.7.2"
+    },
+    "volta": {
+        "node": "24.11.1"
+    }
+}

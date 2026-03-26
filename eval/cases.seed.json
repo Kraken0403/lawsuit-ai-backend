@@ -1,0 +1,98 @@
+[
+  {
+    "id": "citation_exact_kesavananda_air",
+    "category": "citation_lookup",
+    "query": "AIR 1973 SC 1461",
+    "expectation": {
+      "expectedIntent": "case_lookup",
+      "topTitleIncludes": "Kesavananda Bharati",
+      "topCitationIncludes": "1973",
+      "maxLatencyMs": 15000
+    }
+  },
+  {
+    "id": "citation_exact_air_scw_1993",
+    "category": "citation_lookup",
+    "query": "1993 AIR(SCW) 4101",
+    "expectation": {
+      "expectedIntent": "case_lookup",
+      "topCitationIncludes": "1993",
+      "maxLatencyMs": 15000
+    }
+  },
+  {
+    "id": "metadata_fuzzy_kesavananda_citation",
+    "category": "fuzzy_metadata_lookup",
+    "query": "Kesavananda Bharti citation",
+    "expectation": {
+      "expectedIntent": "metadata_lookup",
+      "topTitleIncludes": "Kesavananda Bharati",
+      "answerMustContain": ["1973", "LawSuit"],
+      "maxLatencyMs": 15000
+    }
+  },
+  {
+    "id": "metadata_judges_kesavananda",
+    "category": "metadata_lookup",
+    "query": "Who were the judges in Kesavananda Bharati v. State of Kerala?",
+    "expectation": {
+      "expectedIntent": "metadata_lookup",
+      "topTitleIncludes": "Kesavananda Bharati",
+      "answerMustContain": ["S M Sikri", "H R Khanna"],
+      "maxLatencyMs": 15000
+    }
+  },
+  {
+    "id": "latest_murder_cases_gujarat",
+    "category": "latest_cases",
+    "query": "Latest murder cases in Gujarat",
+    "expectation": {
+      "expectedIntent": "latest_cases",
+      "minGroupedCases": 3,
+      "topCitationIncludes": "LawSuit(Guj)",
+      "answerMustContain": ["Gujarat"],
+      "maxLatencyMs": 20000
+    }
+  },
+  {
+    "id": "followup_summarize_first_case",
+    "category": "follow_up",
+    "query": "summarize the first case",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Latest murder cases in Gujarat"
+      },
+      {
+        "role": "assistant",
+        "content": "The newest visible Gujarat murder decision in the supplied evidence is Raval Shaileshbhai Rameshbhai Virchandbhai v. State of Gujarat, followed by Pintubhai @ Kaliyo Dolubhai Vasava v. State of Gujarat and Raju @ Rajubhai Haribhai Gohel v. State of Gujarat.",
+        "caseDigests": [
+          {
+            "caseId": 472507,
+            "title": "RAVAL SHAILESHBHAI RAMESHBHAI VIRCHANDBHAI V/S STATE OF GUJARAT",
+            "citation": "2026 LawSuit(Guj) 327",
+            "summary": "Fatal stabbing case after quarrel."
+          },
+          {
+            "caseId": 472490,
+            "title": "PINTUBHAI @ KALIO DOLUBHAI VASAVA V/S STATE OF GUJARAT",
+            "citation": "2026 LawSuit(Guj) 310",
+            "summary": "Conviction under Sections 302/114 IPC."
+          },
+          {
+            "caseId": 471813,
+            "title": "RAJU @ RAJUBHAI HARIBHAI GOHEL V/S STATE OF GUJARAT",
+            "citation": "2025 LawSuit(Guj) 3107",
+            "summary": "Rajkot murder dispute."
+          }
+        ]
+      }
+    ],
+    "expectation": {
+      "topCaseId": 472507,
+      "topCitationIncludes": "2026 LawSuit(Guj) 327",
+      "answerMustContain": ["Raval", "302"],
+      "maxLatencyMs": 20000
+    }
+  }
+]

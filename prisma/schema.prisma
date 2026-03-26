@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique @db.VarChar(320)
+  name           String?          @db.VarChar(120)
+  passwordHash   String           @map("password_hash") @db.VarChar(255)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  sessions        Session[]
+  conversations   Conversation[]
+  bookmarkedCases BookmarkedCase[]
+  promptRuns      PromptRun[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(128)
+  userAgent  String?   @map("user_agent") @db.Text
+  ipAddress  String?   @map("ip_address") @db.VarChar(64)
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime  @default(now()) @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Conversation {
+  id         String     @id @default(cuid())
+  userId     String     @map("user_id")
+  title      String     @default("New chat") @db.VarChar(200)
+  shareToken String?    @unique @map("share_token") @db.VarChar(128)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  archivedAt DateTime?  @map("archived_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   Message[]
+  promptRuns PromptRun[]
+
+  @@index([userId, updatedAt])
+  @@map("conversations")
+}
+
+model Message {
+  id                 String      @id @default(cuid())
+  conversationId     String      @map("conversation_id")
+  role               MessageRole
+  content            String      @db.Text
+  sourcesJson        Json?       @map("sources_json")
+  caseDigestsJson    Json?       @map("case_digests_json")
+  traceJson          Json?       @map("trace_json")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  conversation         Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  promptRunsAsUser     PromptRun[]  @relation("UserMessagePromptRuns")
+  promptRunsAsAssistant PromptRun[] @relation("AssistantMessagePromptRuns")
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model BookmarkedCase {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  fingerprint    String   @db.VarChar(500)
+  externalCaseId String?  @map("external_case_id") @db.VarChar(64)
+  title          String   @db.Text
+  citation       String   @db.Text
+  payloadJson    Json?    @map("payload_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint], name: "userId_fingerprint")
+  @@index([userId, createdAt])
+  @@map("bookmarked_cases")
+}
+
+model PromptRun {
+  id                 String    @id @default(cuid())
+  userId             String?   @map("user_id")
+  conversationId     String?   @map("conversation_id")
+  userMessageId      String?   @map("user_message_id")
+  assistantMessageId String?   @map("assistant_message_id")
+  originalQuery      String    @map("original_query") @db.Text
+  effectiveQuery     String?   @map("effective_query") @db.Text
+  mode               String?   @db.VarChar(64)
+  routerJson         Json?     @map("router_json")
+  filtersJson        Json?     @map("filters_json")
+  notesJson          Json?     @map("notes_json")
+  sourcesJson        Json?     @map("sources_json")
+  caseDigestsJson    Json?     @map("case_digests_json")
+  confidence         Float?
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation     Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  userMessage      Message?      @relation("UserMessagePromptRuns", fields: [userMessageId], references: [id], onDelete: SetNull)
+  assistantMessage Message?      @relation("AssistantMessagePromptRuns", fields: [assistantMessageId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("prompt_runs")
+}
+
+model CaseSummary {
+  id               String   @id @default(cuid())
+  caseId           String   @db.VarChar(64)
+  fileName         String?  @db.VarChar(64)
+  title            String?  @db.Text
+  citation         String?  @db.VarChar(255)
+  summaryType      String   @db.VarChar(32)
+  sourceType       String   @default("qdrant") @db.VarChar(32)
+  sourceHash       String   @db.VarChar(64)
+  modelName        String   @db.VarChar(100)
+  status           String   @default("ready") @db.VarChar(20)
+  sectionsJson     Json
+  renderedMarkdown String   @db.LongText
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([caseId, summaryType, sourceHash], map: "uq_case_summary_case_type_hash")
+  @@index([caseId, summaryType], map: "idx_case_summary_case_type")
+}

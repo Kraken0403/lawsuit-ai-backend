@@ -1,0 +1,232 @@
+{
+  "runId": "20260323-194347",
+  "createdAt": "2026-03-23T19:43:47.093Z",
+  "total": 6,
+  "passed": 3,
+  "failed": 3,
+  "passRate": 0.5,
+  "results": [
+    {
+      "id": "citation_exact_kesavananda_air",
+      "category": "citation_lookup",
+      "query": "AIR 1973 SC 1461",
+      "pass": true,
+      "latencyMs": 10603,
+      "checks": {
+        "intent": true,
+        "topCitationIncludes": true,
+        "topTitleIncludes": true,
+        "maxLatencyMs": true
+      },
+      "expected": {
+        "expectedIntent": "case_lookup",
+        "topTitleIncludes": "Kesavananda Bharati",
+        "topCitationIncludes": "1973",
+        "maxLatencyMs": 15000
+      },
+      "actual": {
+        "intent": "case_lookup",
+        "groupedCasesCount": 1,
+        "topCaseId": 107151,
+        "topCitation": "1973 LawSuit(SC) 155",
+        "topTitle": "KESAVANANDA BHARATI SRIPADA GALVARU;RAGHUNATH RAO GANPAT RAO;SHETHIA MINING AND MANUFACTURING CORPORATION LIMITED;ORIENTAL GOAL COMPANY LIMITED V/S STATE OF KERALA;UNION OF INDIA",
+        "answerSummary": "AIR 1973 SC 1461 corresponds to Kesavananda Bharati Sripadagalvaru & Ors. v. State of Kerala & Ors., decided by the Supreme Court of India on 24 April 1973. The recorded proceedings in the supplied evidence show this petition challenged the constitutionality of the Twenty-fourth, Twenty-fifth and Twenty-ninth Constitutional Amendment Acts and raised questions about the interpretation of Article 368, with factual background from Kerala land reform legislation and asserted violations of fundamental rights (Articles 14, 19, 25, 26, 31). The provided evidence is partial and does not include the Court’s full reasoning or final operative holding; it only outlines the issues and the structure of the judgment. If you need the full text of the judgment or its authoritative holdings (for example on amendment power or the “basic structure” doctrine), I can retrieve or summarize those from the complete judgment text.",
+        "warnings": [],
+        "traceNotes": [
+          "used fast-path citation classifier",
+          "citation-first resolution found no exact/equivalent citation match",
+          "citation alias LLM recovery resolved \"Kesavananda Bharati v. State of Kerala\" without full-case expansion"
+        ]
+      },
+      "failureBucket": "none"
+    },
+    {
+      "id": "citation_exact_air_scw_1993",
+      "category": "citation_lookup",
+      "query": "1993 AIR(SCW) 4101",
+      "pass": true,
+      "latencyMs": 5922,
+      "checks": {
+        "intent": true,
+        "topCitationIncludes": true,
+        "maxLatencyMs": true
+      },
+      "expected": {
+        "expectedIntent": "case_lookup",
+        "topCitationIncludes": "1993",
+        "maxLatencyMs": 15000
+      },
+      "actual": {
+        "intent": "case_lookup",
+        "groupedCasesCount": 1,
+        "topCaseId": 118228,
+        "topCitation": "1993 LawSuit(SC) 836",
+        "topTitle": "SUPREME COURT ADVOCATE ON RECORD ASSOCIATION V/S UNION OF INDIA",
+        "answerSummary": "The provided evidence excerpts concern the Supreme Court Advocate-on-Record Association v. Union of India (1993 LawSuit(SC) 836), addressing justiciability and the role/primacy of the Chief Justice of India in judicial appointments and Judge-strength. The documents you supplied do not explicitly state or confirm the citation \"1993 AIR(SCW) 4101\" (or its variants), so I cannot definitively equate that citation with the Advocate-on-Record case on the basis of the given evidence alone. If you can supply the judgment text or a source card that maps 1993 AIR(SCW) 4101 to a specific case, I can confirm and summarize the holding grounded in that evidence.",
+        "warnings": [],
+        "traceNotes": [
+          "used fast-path citation classifier",
+          "resolved exact citation without full-case expansion"
+        ]
+      },
+      "failureBucket": "none"
+    },
+    {
+      "id": "metadata_fuzzy_kesavananda_citation",
+      "category": "fuzzy_metadata_lookup",
+      "query": "Kesavananda Bharti citation",
+      "pass": false,
+      "latencyMs": 13788,
+      "checks": {
+        "intent": true,
+        "topTitleIncludes": false,
+        "answerMustContain": false,
+        "maxLatencyMs": true
+      },
+      "expected": {
+        "expectedIntent": "metadata_lookup",
+        "topTitleIncludes": "Kesavananda Bharati",
+        "answerMustContain": [
+          "1973",
+          "LawSuit"
+        ],
+        "maxLatencyMs": 15000
+      },
+      "actual": {
+        "intent": "metadata_lookup",
+        "groupedCasesCount": 0,
+        "topCaseId": null,
+        "topCitation": null,
+        "topTitle": null,
+        "answerSummary": "No sufficiently relevant answer could be generated.",
+        "warnings": [
+          "No sufficiently relevant grouped cases were found."
+        ],
+        "traceNotes": [
+          "used structured LLM router",
+          "metadata lookup returned no strong resolved match; trying target-only dense rescue",
+          "target-only dense metadata rescue found no acceptable resolved match",
+          "target-only dense rescue failed; falling back to hybrid path"
+        ]
+      },
+      "failureBucket": "retrieval_failure"
+    },
+    {
+      "id": "metadata_judges_kesavananda",
+      "category": "metadata_lookup",
+      "query": "Who were the judges in Kesavananda Bharati v. State of Kerala?",
+      "pass": false,
+      "latencyMs": 10223,
+      "checks": {
+        "intent": true,
+        "topTitleIncludes": false,
+        "answerMustContain": false,
+        "maxLatencyMs": true
+      },
+      "expected": {
+        "expectedIntent": "metadata_lookup",
+        "topTitleIncludes": "Kesavananda Bharati",
+        "answerMustContain": [
+          "S M Sikri",
+          "H R Khanna"
+        ],
+        "maxLatencyMs": 15000
+      },
+      "actual": {
+        "intent": "metadata_lookup",
+        "groupedCasesCount": 0,
+        "topCaseId": null,
+        "topCitation": null,
+        "topTitle": null,
+        "answerSummary": "No sufficiently relevant answer could be generated.",
+        "warnings": [
+          "No sufficiently relevant grouped cases were found."
+        ],
+        "traceNotes": [
+          "used structured LLM router",
+          "metadata lookup returned no strong resolved match; trying target-only dense rescue",
+          "target-only dense metadata rescue found no acceptable resolved match",
+          "target-only dense rescue failed; falling back to hybrid path"
+        ]
+      },
+      "failureBucket": "retrieval_failure"
+    },
+    {
+      "id": "latest_murder_cases_gujarat",
+      "category": "latest_cases",
+      "query": "Latest murder cases in Gujarat",
+      "pass": true,
+      "latencyMs": 14344,
+      "checks": {
+        "intent": true,
+        "topCitationIncludes": true,
+        "minGroupedCases": true,
+        "answerMustContain": true,
+        "maxLatencyMs": true
+      },
+      "expected": {
+        "expectedIntent": "latest_cases",
+        "minGroupedCases": 3,
+        "topCitationIncludes": "LawSuit(Guj)",
+        "answerMustContain": [
+          "Gujarat"
+        ],
+        "maxLatencyMs": 20000
+      },
+      "actual": {
+        "intent": "latest_cases",
+        "groupedCasesCount": 4,
+        "topCaseId": 472507,
+        "topCitation": "2026 LawSuit(Guj) 327",
+        "topTitle": "RAVAL SHAILESHBHAI RAMESHBHAI VIRCHANDBHAI V/S STATE OF GUJARAT",
+        "answerSummary": "The latest murder-related Gujarat authority visible in the supplied evidence is Raval Shaileshbhai Rameshbhai Virchandbhai v. State of Gujarat, decided by the High Court of Gujarat (D.B.) on 17 February 2026. From the excerpt, it concerns a fatal knife assault that began with a quarrel and led to a prosecution under Section 302 IPC after the injured person died during treatment. The next newest visible decision is Pintubhai @ Kalio Dolubhai Vasava v. State of Gujarat, decided on 12 February 2026, also by the Gujarat High Court (D.B.), involving a conviction under Sections 302/114 IPC arising from the killing of Parvatiben in Bharuch district. An older recent Gujarat High Court (D.B.) decision in the evidence is Raju @ Rajubhai Haribhai Gohel v. State of Gujarat, decided on 09 December 2025, concerning a Rajkot murder prosecution involving knife and pipe assault. So, on the material provided, 17 February 2026 is the newest visible decision date.",
+        "warnings": [
+          "Recency-aware retrieval is heuristic because decision dates are parsed at runtime from metadata strings."
+        ],
+        "traceNotes": [
+          "used structured LLM router",
+          "router identified latest/recent case query; shared court resolution, runtime date parsing, state-aware filtering, and newest-first ordering are active",
+          "applied latest-case strict filtering, state-aware jurisdiction normalization, shared court resolution, state-HC preference, and date-prioritized ordering"
+        ]
+      },
+      "failureBucket": "none"
+    },
+    {
+      "id": "followup_summarize_first_case",
+      "category": "follow_up",
+      "query": "summarize the first case",
+      "pass": false,
+      "latencyMs": 23714,
+      "checks": {
+        "topCaseId": true,
+        "topCitationIncludes": true,
+        "answerMustContain": false,
+        "maxLatencyMs": false
+      },
+      "expected": {
+        "topCaseId": 472507,
+        "topCitationIncludes": "2026 LawSuit(Guj) 327",
+        "answerMustContain": [
+          "Raval",
+          "302"
+        ],
+        "maxLatencyMs": 20000
+      },
+      "actual": {
+        "intent": "follow_up",
+        "groupedCasesCount": 1,
+        "topCaseId": 472507,
+        "topCitation": "2026 LawSuit(Guj) 327",
+        "topTitle": "RAVAL SHAILESHBHAI RAMESHBHAI VIRCHANDBHAI V/S STATE OF GUJARAT",
+        "answerSummary": "In **Raval Shaileshbhai Rameshbhai Virchandbhai v. State of Gujarat, 2026 LawSuit(Guj) 327**, the prosecution case, from the extract provided, is that what began as casual interaction turned into a quarrel after the accused allegedly used highly abusive language toward the deceased. When the deceased objected and did not retaliate, the accused is said to have suddenly pulled out a folding knife and inflicted repeated blows on the stomach, chest, abdomen, hand, shoulder, and neck, including blows to vital parts. The injuries were described as fatal and life-threatening, and an eyewitness who tried to intervene was also injured. The legal significance of the visible extract is that it focuses on **intention and the nature of the assault**: repeated knife blows aimed at vital parts are relied on to suggest an intention to cause death, which is central in a murder prosecution. The practical takeaway is that in stabbing cases arising from a quarrel, courts closely examine the weapon used, number and placement of injuries, and whether the attack appeared sudden but deliberate. The final ruling or disposition is not fully visible in the evidence provided.",
+        "warnings": [],
+        "traceNotes": [
+          "resolved ordinal follow-up from prior assistant digests",
+          "used structured LLM router",
+          "resolved exact citation without full-case expansion"
+        ]
+      },
+      "failureBucket": "latency_issue"
+    }
+  ]
+}
