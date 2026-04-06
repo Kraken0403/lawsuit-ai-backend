@@ -3,6 +3,11 @@ import { env } from "../config/env.js";
 import { embedQuery } from "../embeddings/embed.js";
 import type { ClassifiedQuery, RawChunkHit } from "../types/search.js";
 import { buildHybridQueryText } from "../query/rewrite.js";
+import {
+  buildQdrantPayloadFilter,
+  getRequestedCourtCodes,
+} from "./payloadFilters.js";
+import { canonicalizeCourt } from "../utils/courtResolver.js";
 
 function normalize(text: string | null | undefined): string {
   return (text || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -15,6 +20,10 @@ function normalizeLoose(text: string | null | undefined): string {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.map((v) => String(v || "").trim()).filter(Boolean))];
 }
 
 function titleMatchStrength(title: string, target: string): 0 | 1 | 2 | 3 {
@@ -61,16 +70,20 @@ function toChunkHit(result: any): RawChunkHit {
     payload,
   };
 }
+
 function getPrefetchLimits(query: ClassifiedQuery): {
   sparseLimit: number;
   denseLimit: number;
   finalLimit: number;
 } {
+  if (query.intent === "issue_search") {
+    return { sparseLimit: 70, denseLimit: 75, finalLimit: 40 };
+  }
+
   switch (query.strategy) {
     case "citation_heavy":
       return { sparseLimit: 40, denseLimit: 0, finalLimit: 12 };
 
-    // Restore stronger recall for latest/recent retrieval
     case "recency_heavy":
       return { sparseLimit: 70, denseLimit: 36, finalLimit: 40 };
 
@@ -85,7 +98,7 @@ function getPrefetchLimits(query: ClassifiedQuery): {
 
     case "balanced":
     default:
-      return { sparseLimit: 45, denseLimit: 45, finalLimit: 20 };
+      return { sparseLimit: 55, denseLimit: 55, finalLimit: 28 };
   }
 }
 
@@ -157,6 +170,325 @@ function extractCaseTypeHints(query: ClassifiedQuery): string[] {
   return [...new Set(hints)];
 }
 
+function containsAnyLoose(text: string, patterns: string[]): boolean {
+  const hay = normalizeLoose(text);
+  return patterns.some((pattern) => hay.includes(normalizeLoose(pattern)));
+}
+
+type IssueConceptGroup = {
+  patterns: string[];
+  required: boolean;
+  hitBoost: number;
+  missPenalty: number;
+};
+
+function getIssueConceptGroups(query: ClassifiedQuery): IssueConceptGroup[] {
+  if (query.intent !== "issue_search") return [];
+
+  const q = normalizeLoose(query.normalizedQuery || query.originalQuery || "");
+  const lowerCourtHints = (query.filters?.lowerCourtHints || []).map((x) =>
+    normalizeLoose(x)
+  );
+  const groups: IssueConceptGroup[] = [];
+
+  const hasFakeCitation =
+    /\bnon[\s-]?existent\b|\bdoes not exist\b|\bnot exist\b|\bfabricated\b|\bfalse citation\b|\bfake citation\b|\bwrong citation\b|\bbogus\b|\bimaginary\b|\bforged\b|\bfraud on court\b/.test(
+      q
+    );
+
+  const hasSupremeCourt = /\bsupreme court\b|\bsc\b/.test(q);
+
+  const hasLowerCourt =
+    /\bcivil court\b|\btrial court\b|\bsubordinate court\b|\bcivil judge\b|\bdistrict judge\b|\bsessions court\b/.test(
+      q
+    ) || lowerCourtHints.length > 0;
+
+  const hasAction =
+    /\baction\b|\bdisciplinary\b|\bstrictures?\b|\badverse remarks?\b|\bproceedings against\b|\bmisconduct\b|\breprimand\b|\bsupervisory\b/.test(
+      q
+    );
+
+  if (hasFakeCitation) {
+    groups.push({
+      patterns: [
+        "non existent",
+        "non-existent",
+        "does not exist",
+        "did not exist",
+        "fabricated",
+        "false citation",
+        "fake citation",
+        "wrong citation",
+        "bogus citation",
+        "imaginary judgment",
+        "non existent precedent",
+        "non existent supreme court judgment",
+        "forged supreme court order",
+        "fraud on court",
+        "fake supreme court judgment",
+      ],
+      required: true,
+      hitBoost: 1.15,
+      missPenalty: 0.8,
+    });
+  }
+
+  if (hasSupremeCourt) {
+    groups.push({
+      patterns: [
+        "supreme court",
+        "supreme court judgment",
+        "supreme court decision",
+        "supreme court case",
+        "supreme court order",
+        "supreme court precedent",
+      ],
+      required: true,
+      hitBoost: 0.6,
+      missPenalty: 0.3,
+    });
+  }
+
+  if (hasLowerCourt) {
+    groups.push({
+      patterns: [
+        "civil court",
+        "trial court",
+        "subordinate court",
+        "civil judge",
+        "district judge",
+        "lower court",
+        "sessions court",
+        "principal civil judge",
+        "city civil court",
+        "jmfc",
+        "magistrate",
+      ],
+      required: true,
+      hitBoost: 0.85,
+      missPenalty: 0.45,
+    });
+  }
+
+  if (hasAction) {
+    groups.push({
+      patterns: [
+        "disciplinary action",
+        "departmental inquiry",
+        "strictures",
+        "adverse remarks",
+        "proceedings against",
+        "misconduct",
+        "action against",
+        "reprimand",
+        "strictures against",
+        "supervisory jurisdiction",
+        "administrative side",
+      ],
+      required: true,
+      hitBoost: 0.95,
+      missPenalty: 0.5,
+    });
+  }
+
+  return groups;
+}
+
+function scoreIssueSearchConcepts(hit: RawChunkHit, query: ClassifiedQuery): number {
+  const groups = getIssueConceptGroups(query);
+  if (!groups.length) return 0;
+
+  const hay = normalizeLoose(
+    [
+      hit.title || "",
+      hit.text || "",
+      String(hit.payload?.court || ""),
+      String(hit.payload?.courtName || ""),
+      String(hit.payload?.subject || ""),
+      String(hit.payload?.finalDecision || ""),
+      String(hit.payload?.caseType || ""),
+    ].join(" ")
+  );
+
+  let score = 0;
+  let matchedGroups = 0;
+
+  for (const group of groups) {
+    const matched = containsAnyLoose(hay, group.patterns);
+
+    if (matched) {
+      score += group.hitBoost;
+      matchedGroups += 1;
+    } else if (group.required) {
+      score -= group.missPenalty;
+    }
+  }
+
+  if (matchedGroups >= Math.max(2, groups.length - 1)) {
+    score += 0.65;
+  }
+
+  if (groups.length >= 3 && matchedGroups <= 1) {
+    score -= 0.85;
+  }
+
+  return score;
+}
+
+function expandOriginAliases(term: string): string[] {
+  const t = normalizeLoose(term);
+  const map: Record<string, string[]> = {
+    gujarat: ["gujarat", "state of gujarat", "from gujarat", "saurashtra", "kutch"],
+    maharashtra: ["maharashtra", "state of maharashtra", "from bombay", "from maharashtra", "bombay", "mumbai"],
+    delhi: ["delhi", "state of delhi", "from delhi"],
+    karnataka: ["karnataka", "state of karnataka", "from karnataka"],
+    tamilnadu: ["tamil nadu", "state of tamil nadu", "from madras", "from tamil nadu", "madras"],
+    westbengal: ["west bengal", "state of west bengal", "from calcutta", "from west bengal", "calcutta"],
+    uttarpradesh: ["uttar pradesh", "state of uttar pradesh", "from allahabad", "from uttar pradesh", "allahabad"],
+    madhyapradesh: ["madhya pradesh", "state of madhya pradesh", "from madhya pradesh"],
+    kerala: ["kerala", "state of kerala", "from kerala"],
+    rajasthan: ["rajasthan", "state of rajasthan", "from rajasthan"],
+    bihar: ["bihar", "state of bihar", "from bihar", "from patna"],
+    odisha: ["odisha", "orissa", "state of odisha", "state of orissa", "from orissa", "from odisha"],
+  };
+
+  const key = t.replace(/\s+/g, "");
+  return unique(map[key] || [t, `state of ${t}`, `from ${t}`]);
+}
+
+function scoreOriginStateForTransferredOrAppealedCase(
+  hit: RawChunkHit,
+  query: ClassifiedQuery
+): number {
+  const rawTerms = [
+    ...(query.filters?.originJurisdiction || []),
+    ...(!(query.filters?.originJurisdiction || []).length
+      ? query.filters?.jurisdiction || []
+      : []),
+  ].map((j) => normalizeLoose(j));
+
+  if (!rawTerms.length) return 0;
+
+  const aliasTerms = unique(rawTerms.flatMap(expandOriginAliases));
+  const payload = hit.payload || {};
+  const court = String(payload.court || "");
+  const courtName = String(payload.courtName || "");
+  const state = String(payload.state || "");
+  const jurisdiction = String(payload.jurisdiction || "");
+  const title = String(hit.title || "");
+  const text = String(hit.text || "");
+
+  const hay = normalizeLoose(
+    [court, courtName, state, jurisdiction, title, text].join(" ")
+  );
+  const courtOnly = normalizeLoose([court, courtName].join(" "));
+
+  let score = 0;
+  let matchedAny = false;
+
+  for (const term of aliasTerms) {
+    if (!term) continue;
+
+    if (courtOnly.includes(term)) {
+      score += term.startsWith("from ") ? 1.9 : 0.95;
+      matchedAny = true;
+    } else if (hay.includes(term)) {
+      score += term.startsWith("state of ") ? 0.95 : 0.45;
+      matchedAny = true;
+    }
+  }
+
+  if (!matchedAny && /\bfrom\b/.test(courtOnly)) {
+    score -= 0.6;
+  }
+
+  return score;
+}
+
+function expandLowerCourtHintPatterns(lowerCourtHints: string[]): string[] {
+  const out: string[] = [];
+
+  for (const rawHint of lowerCourtHints) {
+    const hint = normalizeLoose(rawHint);
+
+    if (hint.includes("civil court")) {
+      out.push(
+        "civil court",
+        "principal civil judge",
+        "city civil court",
+        "civil judge",
+        "district court",
+        "subordinate court"
+      );
+      continue;
+    }
+
+    if (hint.includes("trial court")) {
+      out.push(
+        "trial court",
+        "sessions court",
+        "district and sessions judge",
+        "principal sessions judge",
+        "trial judge",
+        "magistrate",
+        "jmfc"
+      );
+      continue;
+    }
+
+    if (hint.includes("subordinate")) {
+      out.push(
+        "subordinate court",
+        "trial court",
+        "civil judge",
+        "district judge",
+        "sessions judge",
+        "magistrate"
+      );
+      continue;
+    }
+
+    out.push(hint);
+  }
+
+  return unique(out);
+}
+
+function scoreLowerCourtHints(hit: RawChunkHit, query: ClassifiedQuery): number {
+  const lowerHints = query.filters?.lowerCourtHints || [];
+  if (!lowerHints.length) return 0;
+
+  const patterns = expandLowerCourtHintPatterns(lowerHints);
+  const hay = normalizeLoose(
+    [
+      hit.title || "",
+      hit.text || "",
+      String(hit.payload?.court || ""),
+      String(hit.payload?.courtName || ""),
+      String(hit.payload?.subject || ""),
+      String(hit.payload?.caseType || ""),
+    ].join(" ")
+  );
+
+  let score = 0;
+  let matched = 0;
+
+  for (const pattern of patterns) {
+    if (hay.includes(pattern)) {
+      matched += 1;
+      score += 0.42;
+    }
+  }
+
+  if (matched > 0) {
+    score += Math.min(matched, 3) * 0.18;
+  } else if (query.intent === "issue_search") {
+    score -= 0.45;
+  }
+
+  return score;
+}
+
 function payloadBlob(hit: RawChunkHit): string {
   const payload = hit.payload || {};
   const acts = Array.isArray(payload.actsReferred)
@@ -179,6 +511,7 @@ function payloadBlob(hit: RawChunkHit): string {
       String(payload.bench || ""),
       String(payload.subject || ""),
       String(payload.caseType || ""),
+      String(payload.finalDecision || ""),
       acts,
       judges,
       eqCitations,
@@ -196,6 +529,10 @@ function postScoreHit(hit: RawChunkHit, query: ClassifiedQuery): number {
   const blob = payloadBlob(hit);
   const filters = query.filters || {};
   const caseTypeHints = extractCaseTypeHints(query);
+  const requestedCourtCodes = getRequestedCourtCodes(query);
+  const hitCourtCode = canonicalizeCourt(
+    (hit.payload || {}) as Record<string, unknown>
+  ).code;
 
   if (query.caseTarget) {
     const target = normalize(query.caseTarget);
@@ -312,7 +649,13 @@ function postScoreHit(hit: RawChunkHit, query: ClassifiedQuery): number {
     }
   }
 
-  if (filters.courts?.length) {
+  if (requestedCourtCodes.length) {
+    if (hitCourtCode && requestedCourtCodes.includes(hitCourtCode)) {
+      score += 1.45;
+    } else {
+      score -= 1.1;
+    }
+  } else if (filters.courts?.length) {
     const matched = filters.courts.some((court) => blob.includes(normalize(court)));
     score += matched ? 0.95 : -0.7;
   }
@@ -322,9 +665,17 @@ function postScoreHit(hit: RawChunkHit, query: ClassifiedQuery): number {
     score += matched ? 0.7 : -0.45;
   }
 
+  score += scoreOriginStateForTransferredOrAppealedCase(hit, query);
+  score += scoreLowerCourtHints(hit, query);
+
   if (filters.subjects?.length) {
     const matched = filters.subjects.some((s) => blob.includes(normalize(s)));
-    score += matched ? 0.9 : -0.55;
+
+    if (matched) {
+      score += 0.9;
+    } else if (query.intent !== "issue_search") {
+      score -= 0.55;
+    }
   }
 
   if (filters.statutes?.length) {
@@ -341,6 +692,8 @@ function postScoreHit(hit: RawChunkHit, query: ClassifiedQuery): number {
     const matched = caseTypeHints.some((hint) => blob.includes(normalize(hint)));
     score += matched ? 0.5 : -0.2;
   }
+
+  score += scoreIssueSearchConcepts(hit, query);
 
   if (query.strategy === "recency_heavy" || query.intent === "latest_cases") {
     const decisionTime = parseDecisionTime(hit.payload || {});
@@ -374,17 +727,22 @@ export async function runHybridSearch(
   const hybridText = buildHybridQueryText(classified);
   const limits = getPrefetchLimits(classified);
   const skipDense = shouldSkipDense(classified);
+  const payloadFilter = buildQdrantPayloadFilter(classified);
 
-  const prefetch: any[] = [
-    {
-      query: {
-        text: hybridText,
-        model: "Qdrant/bm25",
-      },
-      using: "sparse",
-      limit: limits.sparseLimit,
+  const sparsePrefetch: any = {
+    query: {
+      text: hybridText,
+      model: "Qdrant/bm25",
     },
-  ];
+    using: "sparse",
+    limit: limits.sparseLimit,
+  };
+
+  if (payloadFilter) {
+    sparsePrefetch.filter = payloadFilter;
+  }
+
+  const prefetch: any[] = [sparsePrefetch];
 
   if (!skipDense && limits.denseLimit > 0) {
     const denseInput =
@@ -394,21 +752,33 @@ export async function runHybridSearch(
 
     const denseVector = await embedQuery(denseInput);
 
-    prefetch.push({
+    const densePrefetch: any = {
       query: denseVector,
       using: "dense",
       limit: limits.denseLimit,
-    });
+    };
+
+    if (payloadFilter) {
+      densePrefetch.filter = payloadFilter;
+    }
+
+    prefetch.push(densePrefetch);
   }
 
-  const results = await qdrant.query(env.qdrant.collection, {
+  const queryRequest: any = {
     prefetch,
     query: {
       fusion: "rrf",
     },
     limit: limit ?? limits.finalLimit,
     with_payload: true,
-  });
+  };
+
+  if (payloadFilter) {
+    queryRequest.filter = payloadFilter;
+  }
+
+  const results = await qdrant.query(env.qdrant.collection, queryRequest);
 
   const points = Array.isArray((results as any).points)
     ? (results as any).points

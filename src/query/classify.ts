@@ -25,7 +25,7 @@ function findAllMatches(pattern: RegExp, text: string): string[] {
   return matches ? [...new Set(matches.map((m) => m.trim()))] : [];
 }
 
-function detectMetadataField(query: string): MetadataField | null {
+export function detectMetadataField(query: string): MetadataField | null {
   const q = query.toLowerCase();
 
   if (/\bequivalent citation\b|\bequivalent citations\b/.test(q)) return "equivalentCitations";
@@ -51,6 +51,28 @@ function detectMetadataField(query: string): MetadataField | null {
   if (/\bcase type\b/.test(q)) return "caseType";
 
   return null;
+}
+
+export function stripMetadataInstruction(text: string): string {
+  let out = (text || "").replace(/\s+/g, " ").trim();
+  if (!out) return "";
+
+  out = out.replace(
+    /^(give|find|show|tell me|what is|what's|who were|who are)\s+/i,
+    ""
+  );
+
+  out = out.replace(
+    /^(the\s+)?(citation|court|judges?|judge|date of decision|date decided|decision date|case number|case no|acts referred|subject|final decision|advocates|case type)\s+(of|for)\s+/i,
+    ""
+  );
+
+  out = out.replace(
+    /\s+\b(citation|court|judges?|judge|date of decision|date decided|decision date|case number|case no|acts referred|subject|final decision|advocates|case type)\b\s*$/i,
+    ""
+  );
+
+  return out.replace(/\s+/g, " ").trim();
 }
 
 function isFullJudgmentQuery(query: string): boolean {
@@ -99,8 +121,8 @@ function inferIntent(
     return { intent: "comparison", confidence: 0.93, reasons };
   }
 
-  if (metadataField && caseTarget) {
-    reasons.push("matched metadata field with case target");
+  if (metadataField && (caseTarget || comparisonTargets.length === 0)) {
+    reasons.push("matched metadata field query");
     return { intent: "metadata_lookup", confidence: 0.95, reasons };
   }
 
@@ -130,9 +152,13 @@ function inferStrategy(intent: QueryIntent): QueryStrategy {
 
 export function classifyQuery(query: string): ClassifiedQuery {
   const normalizedQuery = normalizeQuery(query);
-  const caseTarget = extractCaseTarget(normalizedQuery);
-  const comparisonTargets = extractComparisonTargets(normalizedQuery);
   const metadataField = detectMetadataField(normalizedQuery);
+  const cleanedCitationQuery = stripMetadataInstruction(normalizedQuery);
+
+  const caseTarget = extractCaseTarget(
+    metadataField ? cleanedCitationQuery : normalizedQuery
+  );
+  const comparisonTargets = extractComparisonTargets(normalizedQuery);
 
   const exactTerms = [
     ...findAllMatches(ARTICLE_PATTERN, normalizedQuery),
@@ -142,9 +168,8 @@ export function classifyQuery(query: string): ClassifiedQuery {
   ];
 
   const citations = CITATION_PATTERNS.flatMap((rx) =>
-    findAllMatches(rx, normalizedQuery)
+    findAllMatches(rx, cleanedCitationQuery)
   );
-
   const { intent, confidence, reasons } = inferIntent(
     normalizedQuery,
     caseTarget,
@@ -157,7 +182,9 @@ export function classifyQuery(query: string): ClassifiedQuery {
       ? comparisonTargets
       : caseTarget
         ? [caseTarget]
-        : [];
+        : citations.length
+          ? [cleanedCitationQuery]
+          : [];
 
   return {
     originalQuery: query,
@@ -169,7 +196,13 @@ export function classifyQuery(query: string): ClassifiedQuery {
     caseHints,
     caseTarget,
     metadataField,
-    referenceTerms: [...exactTerms, ...citations],
+    referenceTerms: [
+      ...exactTerms,
+      ...citations,
+      ...(cleanedCitationQuery && cleanedCitationQuery !== normalizedQuery
+        ? [cleanedCitationQuery]
+        : []),
+    ],
     comparisonTargets,
     followUpLikely: /\bthis case\b|\bthat case\b|\bthis judgment\b|\bthat judgment\b/i.test(
       normalizedQuery

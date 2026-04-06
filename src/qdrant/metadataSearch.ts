@@ -1,6 +1,11 @@
 import { qdrant } from "./client.js";
 import { env } from "../config/env.js";
 import type { ClassifiedQuery, RawChunkHit } from "../types/search.js";
+import {
+  buildQdrantPayloadFilter,
+  getRequestedCourtCodes,
+} from "./payloadFilters.js";
+import { canonicalizeCourt } from "../utils/courtResolver.js";
 
 function compact(text: string | null | undefined): string {
   return (text || "").replace(/\s+/g, " ").trim();
@@ -222,7 +227,6 @@ function extractCaseTypeHints(classified: ClassifiedQuery): string[] {
   return unique(hints);
 }
 
-
 function stripMetadataInstruction(text: string): string {
   let out = compact(text);
   if (!out) return "";
@@ -275,6 +279,22 @@ type RankedFilter = {
   filter: any;
 };
 
+function mergeFilters(baseFilter: any | undefined, filter: any): any {
+  if (!baseFilter) return filter;
+
+  const merged: any = {};
+
+  const must = [...(baseFilter.must || []), ...(filter.must || [])];
+  const should = [...(baseFilter.should || []), ...(filter.should || [])];
+  const must_not = [...(baseFilter.must_not || []), ...(filter.must_not || [])];
+
+  if (must.length) merged.must = must;
+  if (should.length) merged.should = should;
+  if (must_not.length) merged.must_not = must_not;
+
+  return merged;
+}
+
 function getMetadataSearchPlan(classified: ClassifiedQuery) {
   if (classified.strategy === "citation_heavy") {
     return {
@@ -319,17 +339,20 @@ function buildMetadataFilters(classified: ClassifiedQuery): RankedFilter[] {
   const ranked: RankedFilter[] = [];
   const seen = new Set<string>();
 
+  const baseFilter = buildQdrantPayloadFilter(classified);
+
   const pushFilter = (priority: number, filter: any) => {
-    const key = JSON.stringify(filter);
+    const finalFilter = mergeFilters(baseFilter, filter);
+    const key = JSON.stringify(finalFilter);
+
     if (!seen.has(key)) {
       seen.add(key);
-      ranked.push({ priority, filter });
+      ranked.push({ priority, filter: finalFilter });
     }
   };
 
   const filtersInput = classified.filters || {};
   const caseTypeHints = extractCaseTypeHints(classified);
-
   const caseTargetVariants = getCaseTargetVariants(classified);
 
   for (const [index, target] of caseTargetVariants.slice(0, 5).entries()) {
@@ -523,6 +546,11 @@ function scoreMetadataHit(hit: RawChunkHit, classified: ClassifiedQuery): number
   const citedCount =
     typeof payload.cited === "number" ? payload.cited : Number(payload.cited || 0);
 
+  const requestedCourtCodes = getRequestedCourtCodes(classified);
+  const hitCourtCode = canonicalizeCourt(
+    payload as Record<string, unknown>
+  ).code;
+
   let score = 0;
 
   const caseTargetVariants = getCaseTargetVariants(classified);
@@ -584,8 +612,16 @@ function scoreMetadataHit(hit: RawChunkHit, classified: ClassifiedQuery): number
     }
   }
 
-  for (const courtFilter of filters.courts || []) {
-    if (includesLoose(court, courtFilter)) score += 28;
+  if (requestedCourtCodes.length) {
+    if (hitCourtCode && requestedCourtCodes.includes(hitCourtCode)) {
+      score += 55;
+    } else {
+      score -= 35;
+    }
+  } else {
+    for (const courtFilter of filters.courts || []) {
+      if (includesLoose(court, courtFilter)) score += 28;
+    }
   }
 
   for (const subjectFilter of filters.subjects || []) {

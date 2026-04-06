@@ -9,12 +9,14 @@
         "review:logs": "tsx scripts/reviewSearchLogs.ts",
         "dev": "tsx src/server.ts",
         "eval:run": "tsx src/scripts/runEval.ts",
-        "eval:seed": "tsx src/scripts/runEval.ts eval/cases.seed.json"
+        "eval:seed": "tsx src/scripts/runEval.ts eval/cases.seed.json",
+        "seed:drafting-templates": "tsx src/scripts/seedDraftTemplates.ts"
     },
     "dependencies": {
         "@prisma/adapter-mariadb": "^7.5.0",
         "@prisma/client": "^7.5.0",
         "@qdrant/js-client-rest": "^1.15.0",
+        "@turbodocx/html-to-docx": "^1.20.1",
         "bcryptjs": "^3.0.3",
         "compression": "^1.8.1",
         "cookie-parser": "^1.4.7",
@@ -22,11 +24,14 @@
         "dotenv": "^16.6.1",
         "express": "^5.2.1",
         "mssql": "^12.2.1",
-        "openai": "^6.29.0"
+        "multer": "^2.1.1",
+        "openai": "^6.29.0",
+        "playwright": "^1.59.1"
     },
     "devDependencies": {
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.6",
+        "@types/multer": "^2.1.0",
         "@types/node": "^22.10.1",
         "prisma": "^7.5.0",
         "tsx": "^4.19.2",

@@ -8,15 +8,28 @@ import {
 
 export const conversationsRouter = express.Router();
 
+function parseChatMode(value: unknown): "JUDGMENT" | "DRAFTING_STUDIO" | "ARGUMENT" | null {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (normalized === "judgment") return "JUDGMENT";
+  if (normalized === "drafting_studio") return "DRAFTING_STUDIO";
+  if (normalized === "argument") return "ARGUMENT";
+
+  return null;
+}
+
 conversationsRouter.use(optionalAuth);
 conversationsRouter.use(requireAuth);
 
 conversationsRouter.get("/", async (req: AuthenticatedRequest, res, next) => {
   try {
+    const requestedChatMode = parseChatMode(req.query.chatMode);
+
     const conversations = await prisma.conversation.findMany({
       where: {
         userId: req.auth!.userId,
         archivedAt: null,
+        ...(requestedChatMode ? { chatMode: requestedChatMode } : {}),
       },
       orderBy: {
         updatedAt: "desc",
@@ -24,6 +37,7 @@ conversationsRouter.get("/", async (req: AuthenticatedRequest, res, next) => {
       select: {
         id: true,
         title: true,
+        chatMode: true,
         createdAt: true,
         updatedAt: true,
         messages: {
@@ -48,12 +62,16 @@ conversationsRouter.get("/", async (req: AuthenticatedRequest, res, next) => {
       conversations: conversations.map((item) => ({
         id: item.id,
         title: item.title,
+        chatMode: item.chatMode.toLowerCase(),
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         messageCount: item._count.messages,
         preview: item.messages[0]?.content || "",
-        lastMessageRole:
-          item.messages[0]?.role === "USER" ? "user" : "assistant",
+        lastMessageRole: item.messages[0]
+          ? item.messages[0].role === "USER"
+            ? "user"
+            : "assistant"
+          : null,
         lastMessageAt: item.messages[0]?.createdAt || item.updatedAt,
       })),
     });
@@ -65,15 +83,18 @@ conversationsRouter.get("/", async (req: AuthenticatedRequest, res, next) => {
 conversationsRouter.post("/", async (req: AuthenticatedRequest, res, next) => {
   try {
     const title = String(req.body?.title || "").trim() || "New chat";
+    const requestedChatMode = parseChatMode(req.body?.chatMode) || "JUDGMENT";
 
     const conversation = await prisma.conversation.create({
       data: {
         userId: req.auth!.userId,
         title,
+        chatMode: requestedChatMode,
       },
       select: {
         id: true,
         title: true,
+        chatMode: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -81,7 +102,10 @@ conversationsRouter.post("/", async (req: AuthenticatedRequest, res, next) => {
 
     res.status(201).json({
       ok: true,
-      conversation,
+      conversation: {
+        ...conversation,
+        chatMode: conversation.chatMode.toLowerCase(),
+      },
     });
   } catch (error) {
     next(error);
@@ -99,6 +123,7 @@ conversationsRouter.get("/:id", async (req: AuthenticatedRequest, res, next) => 
       select: {
         id: true,
         title: true,
+        chatMode: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -113,7 +138,10 @@ conversationsRouter.get("/:id", async (req: AuthenticatedRequest, res, next) => 
 
     res.status(200).json({
       ok: true,
-      conversation,
+      conversation: {
+        ...conversation,
+        chatMode: conversation.chatMode.toLowerCase(),
+      },
     });
   } catch (error) {
     next(error);
@@ -131,6 +159,7 @@ conversationsRouter.get("/:id/messages", async (req: AuthenticatedRequest, res, 
       select: {
         id: true,
         title: true,
+        chatMode: true,
       },
     });
 
@@ -161,7 +190,10 @@ conversationsRouter.get("/:id/messages", async (req: AuthenticatedRequest, res, 
 
     res.status(200).json({
       ok: true,
-      conversation,
+      conversation: {
+        ...conversation,
+        chatMode: conversation.chatMode.toLowerCase(),
+      },
       messages: messages.map((message) => ({
         id: message.id,
         role: message.role === "USER" ? "user" : "assistant",
@@ -194,7 +226,7 @@ conversationsRouter.patch("/:id", async (req: AuthenticatedRequest, res, next) =
         userId: req.auth!.userId,
         archivedAt: null,
       },
-      select: { id: true },
+      select: { id: true, chatMode: true },
     });
 
     if (!existing) {
@@ -210,13 +242,17 @@ conversationsRouter.patch("/:id", async (req: AuthenticatedRequest, res, next) =
       select: {
         id: true,
         title: true,
+        chatMode: true,
         updatedAt: true,
       },
     });
 
     res.status(200).json({
       ok: true,
-      conversation: updated,
+      conversation: {
+        ...updated,
+        chatMode: updated.chatMode.toLowerCase(),
+      },
     });
   } catch (error) {
     next(error);

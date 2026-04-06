@@ -11,7 +11,11 @@ import type {
   SearchTrace,
   RawChunkHit,
 } from "../types/search.js";
-import { classifyQuery } from "../query/classify.js";
+import {
+  classifyQuery,
+  detectMetadataField,
+  stripMetadataInstruction,
+} from "../query/classify.js";
 import { dedupeChunks } from "../ranking/dedupe.js";
 import { groupHitsByCase } from "../ranking/groupCases.js";
 import { selectEvidence } from "../ranking/selectEvidence.js";
@@ -62,6 +66,18 @@ function citationTokenFingerprint(text: string | null | undefined): string {
     .join(" ");
 }
 
+
+
+function sortLatestCaseGroups(groups: CaseGroup[]): CaseGroup[] {
+  return [...groups].sort((a, b) => {
+    const ta = getGroupDecisionTime(a) || 0;
+    const tb = getGroupDecisionTime(b) || 0;
+
+    if (tb !== ta) return tb - ta;
+    return (b.bestScore || 0) - (a.bestScore || 0);
+  });
+}
+
 function expandCitationVariants(text: string | null | undefined): string[] {
   const base = compact(text);
   if (!base) return [];
@@ -110,26 +126,35 @@ function inferCitationCourtFilters(query: string): string[] {
 }
 
 function buildFastCitationClassifiedQuery(rawQuery: string): ClassifiedQuery {
-  const citations = expandCitationVariants(rawQuery);
+  const cleanedQuery = stripMetadataInstruction(rawQuery);
+  const metadataField = detectMetadataField(rawQuery);
+  const citations = expandCitationVariants(cleanedQuery);
 
   return {
     originalQuery: compact(rawQuery),
-    normalizedQuery: compact(rawQuery),
-    intent: "case_lookup",
+    normalizedQuery: compact(cleanedQuery),
+    intent: metadataField ? "metadata_lookup" : "case_lookup",
     confidence: 0.99,
-    exactTerms: [compact(rawQuery)],
+    exactTerms: [compact(cleanedQuery)],
     citations,
-    caseHints: [],
+    caseHints: cleanedQuery ? [cleanedQuery] : [],
     caseTarget: null,
-    metadataField: null,
-    referenceTerms: citations,
+    metadataField,
+    referenceTerms: uniqueStrings([
+      cleanedQuery,
+      ...citations,
+    ]),
     comparisonTargets: [],
     followUpLikely: false,
     strategy: "citation_heavy",
-    reasons: ["fast-path: direct citation query"],
+    reasons: [
+      metadataField
+        ? "fast-path: metadata-over-direct-citation query"
+        : "fast-path: direct citation query",
+    ],
     filters: {
       jurisdiction: [],
-      courts: inferCitationCourtFilters(rawQuery),
+      courts: inferCitationCourtFilters(cleanedQuery),
       statutes: [],
       sections: [],
       subjects: [],
@@ -173,7 +198,9 @@ function parseDecisionTime(payload: Record<string, unknown>): number | null {
   return null;
 }
 
-function getGroupDecisionTime(group: CaseGroup): number | null {
+function getGroupDecisionTime(group?: CaseGroup | null): number | null {
+  if (!group) return null;
+
   const times = (group.chunks || [])
     .map((c) => parseDecisionTime(c.payload || {}))
     .filter((v): v is number => typeof v === "number");
@@ -779,7 +806,9 @@ async function buildClassifiedQuery(params: {
 }): Promise<ClassifiedQuery> {
   const { rawQuery, messages, state, trace } = params;
 
-  if (looksLikePureCitationQuery(rawQuery)) {
+  const cleanedFastPathQuery = stripMetadataInstruction(rawQuery);
+
+  if (looksLikePureCitationQuery(cleanedFastPathQuery)) {
     const fast = buildFastCitationClassifiedQuery(rawQuery);
     trace.effectiveQuery = fast.normalizedQuery;
     trace.filtersApplied = fast.filters;
@@ -972,20 +1001,32 @@ async function resolveCitationAliasWithLlm(
   }
 }
 
+function latestSearchBlob(group: CaseGroup): string {
+  return [
+    metadataBlob(group),
+    ...(group.chunks || []).map((c) => compact(c.text || "")),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
 function filterLatestCaseGroups(
   groups: CaseGroup[],
   classified: ClassifiedQuery
 ): CaseGroup[] {
+  if (!groups.length) return [];
+
   const filters = classified.filters || {};
   const subjectKeywords = extractSubjectKeywords(classified);
   const jurisdictions = normalizeLatestJurisdictions(classified);
   const courts = (filters.courts || []).map((c) => normalizeLooseSimple(c));
 
   const strict = groups.filter((group) => {
-    const meta = metadataBlob(group);
+    const searchBlob = latestSearchBlob(group);
 
     const subjectOk =
-      !subjectKeywords.length || subjectKeywords.some((s) => meta.includes(s));
+      !subjectKeywords.length ||
+      subjectKeywords.some((s) => searchBlob.includes(s));
 
     const jurisdictionOk =
       !jurisdictions.length ||
@@ -998,6 +1039,7 @@ function filterLatestCaseGroups(
   });
 
   const candidateSet = strict.length ? strict : groups;
+  if (!candidateSet.length) return [];
 
   const newestSorted = [...candidateSet].sort((a, b) => {
     const ta = getGroupDecisionTime(a) || 0;
@@ -1011,6 +1053,8 @@ function filterLatestCaseGroups(
 
     return (b.bestScore || 0) - (a.bestScore || 0);
   });
+
+  if (!newestSorted.length) return [];
 
   const newestTime = getGroupDecisionTime(newestSorted[0]);
   if (!newestTime) return newestSorted.slice(0, 5);
@@ -1080,20 +1124,54 @@ async function runHybridPath(
     )
   );
 
+    console.log("[runHybridPath] hybridHits:", hybridHits.length);
+  console.log(
+    "[runHybridPath] firstHitMeta:",
+    hybridHits.slice(0, 3).map((hit) => ({
+      caseId: hit.caseId,
+      title: hit.title,
+      court: hit.payload?.court,
+      courtId: hit.payload?.courtId,
+      decisionDate: hit.payload?.decisionDate,
+      decisionYear: hit.payload?.decisionYear,
+      score: hit.score,
+    }))
+  );
+
+
+
+
   let groupedCases = groupHitsByCase(
     hybridHits,
     classified.intent === "latest_cases" ? 5 : 3,
     classified
   );
 
+  console.log("[runHybridPath] groupedCases:", groupedCases.length);
+  console.log(
+    "[runHybridPath] groupedMeta:",
+    groupedCases.slice(0, 5).map((group) => ({
+      caseId: group.caseId,
+      title: group.title,
+      bestScore: group.bestScore,
+      chunkCount: group.chunks?.length || 0,
+      courtId: group.chunks?.[0]?.payload?.courtId,
+      court: group.chunks?.[0]?.payload?.court,
+      decisionDate: group.chunks?.[0]?.payload?.decisionDate,
+      decisionYear: group.chunks?.[0]?.payload?.decisionYear,
+    }))
+  );
+
+
   let evidence: RawChunkHit[];
 
   if (classified.intent === "latest_cases") {
     const filtered = filterLatestCaseGroups(groupedCases, classified);
+
     if (filtered.length) {
       groupedCases = filtered;
       trace.notes.push(
-        "applied latest-case strict filtering, state-aware jurisdiction normalization, shared court resolution, state-HC preference, and date-prioritized ordering"
+        "applied latest-case strict filtering with chunk-text subject matching"
       );
     } else {
       trace.notes.push(
@@ -1101,6 +1179,7 @@ async function runHybridPath(
       );
     }
 
+    groupedCases = sortLatestCaseGroups(groupedCases);
     evidence = buildLatestEvidence(groupedCases, 10);
   } else {
     evidence = selectEvidence(groupedCases, 10);

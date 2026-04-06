@@ -103,6 +103,8 @@ function buildFallbackRouterOutput(query: string): RouterOutput {
       sections: [],
       subjects: [],
       timeQualifier: "none",
+      originJurisdiction: [],
+      lowerCourtHints: [],
     },
     retrievalPlan: {
       strategy: "balanced",
@@ -116,6 +118,8 @@ function buildFallbackRouterOutput(query: string): RouterOutput {
         dateFrom: null,
         dateTo: null,
         onlyReported: false,
+        originJurisdiction: [],
+        lowerCourtHints: [],
       },
       topK: 24,
       rerankTopN: 12,
@@ -183,7 +187,9 @@ function routerLooksLikeFreshQuery(router: RouterOutput): boolean {
       router.entities.subjects?.length ||
       router.entities.courts?.length ||
       router.entities.statutes?.length ||
-      router.entities.sections?.length
+      router.entities.sections?.length ||
+      router.entities.originJurisdiction?.length ||
+      router.entities.lowerCourtHints?.length
   );
 }
 

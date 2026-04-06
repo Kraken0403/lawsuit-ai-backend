@@ -31,112 +31,129 @@ export function normalizeCourtText(text: string | null | undefined): string {
     .trim();
 }
 
-const HIGH_COURT_PATTERNS: HighCourtPattern[] = [
-  {
-    code: "ALLAHABAD_HC",
-    state: "uttar pradesh",
-    aliases: ["allahabad high court", "allahabad", "uttar pradesh high court"],
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
+function toCanonicalCourt(entry: CourtIdEntry, rawCourt: string): CanonicalCourt {
+  return {
+    code: entry.code,
+    level: entry.level,
+    state: entry.state,
+    rawCourt,
+  };
+}
+
+function parseCourtId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
+function findCourtEntriesByText(input: string): CourtIdEntry[] {
+  const wanted = normalizeCourtText(input);
+  if (!wanted) return [];
+
+  return Object.values(COURT_ID_MAP).filter((entry) =>
+    entry.aliases.some((alias) => {
+      const normalizedAlias = normalizeCourtText(alias);
+      return (
+        normalizedAlias === wanted ||
+        normalizedAlias.includes(wanted) ||
+        wanted.includes(normalizedAlias)
+      );
+    })
+  );
+}
+
+function inferCourtFromCourtId(payload: Record<string, unknown>): CanonicalCourt | null {
+  const rawCourt = compact(
+    [String(payload.court ?? ""), String(payload.courtName ?? "")]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  const numericCourtId = parseCourtId(payload.courtId);
+  if (!numericCourtId) return null;
+
+  const entry = COURT_ID_MAP[numericCourtId];
+  if (!entry) return null;
+
+  return toCanonicalCourt(entry, rawCourt);
+}
+
+export function getCourtIdsForFilter(courtFilter: string): number[] {
+  const directTextMatches = findCourtEntriesByText(courtFilter);
+  if (directTextMatches.length) {
+    return unique(directTextMatches.map((entry) => entry.id));
+  }
+
+  const resolved = canonicalizeCourt({ court: courtFilter });
+  if (!resolved.code) return [];
+
+  return COURT_CODE_TO_IDS[resolved.code] || [];
+}
+
+type CourtIdEntry = {
+  id: number;
+  code: string;
+  level: "SC" | "HC" | "OTHER";
+  state: string | null;
+  aliases: string[];
+};
+
+const COURT_ID_MAP: Record<number, CourtIdEntry> = {
+  1: {
+    id: 1,
+    code: "SC",
+    level: "SC",
+    state: null,
+    aliases: ["supreme court", "supreme court of india", "sc"],
   },
-  {
-    code: "ANDHRA_PRADESH_HC",
-    state: "andhra pradesh",
-    aliases: ["andhra pradesh high court", "high court of andhra pradesh", "andhra pradesh"],
-  },
-  {
-    code: "BOMBAY_HC",
-    state: "maharashtra",
-    aliases: ["bombay high court", "bombay", "mumbai high court", "maharashtra high court"],
-  },
-  {
-    code: "CALCUTTA_HC",
-    state: "west bengal",
-    aliases: ["calcutta high court", "calcutta", "kolkata high court", "west bengal high court"],
-  },
-  {
-    code: "CHHATTISGARH_HC",
-    state: "chhattisgarh",
-    aliases: ["chhattisgarh high court", "high court of chhattisgarh", "chhattisgarh"],
-  },
-  {
+
+  2: {
+    id: 2,
     code: "DELHI_HC",
+    level: "HC",
     state: "delhi",
     aliases: ["delhi high court", "high court of delhi", "delhi"],
   },
-  {
-    code: "GAUHATI_HC",
-    state: "assam",
-    aliases: ["gauhati high court", "gauhati", "guwahati high court", "assam high court"],
+  3: {
+    id: 3,
+    code: "BOMBAY_HC",
+    level: "HC",
+    state: "maharashtra",
+    aliases: ["bombay high court", "bombay", "mumbai high court", "maharashtra high court"],
   },
-  {
+  4: {
+    id: 4,
     code: "GUJARAT_HC",
+    level: "HC",
     state: "gujarat",
     aliases: ["gujarat high court", "high court of gujarat", "gujarat"],
   },
-  {
-    code: "HIMACHAL_PRADESH_HC",
-    state: "himachal pradesh",
-    aliases: ["himachal pradesh high court", "high court of himachal pradesh", "himachal pradesh"],
+  5: {
+    id: 5,
+    code: "ALLAHABAD_HC",
+    level: "HC",
+    state: "uttar pradesh",
+    aliases: ["allahabad high court", "allahabad", "uttar pradesh high court"],
   },
-  {
-    code: "JAMMU_KASHMIR_LADAKH_HC",
-    state: "jammu and kashmir",
-    aliases: [
-      "high court of jammu and kashmir and ladakh",
-      "high court of jammu kashmir and ladakh",
-      "jammu and kashmir and ladakh high court",
-      "jammu kashmir and ladakh high court",
-      "jammu and kashmir high court",
-      "jammu kashmir high court",
-      "ladakh high court",
-    ],
+  6: {
+    id: 6,
+    code: "GAUHATI_HC",
+    level: "HC",
+    state: "assam",
+    aliases: ["gauhati high court", "gauhati", "guwahati high court", "assam high court"],
   },
-  {
-    code: "JHARKHAND_HC",
-    state: "jharkhand",
-    aliases: ["jharkhand high court", "high court of jharkhand", "jharkhand"],
-  },
-  {
-    code: "KARNATAKA_HC",
-    state: "karnataka",
-    aliases: ["karnataka high court", "high court of karnataka", "karnataka"],
-  },
-  {
-    code: "KERALA_HC",
-    state: "kerala",
-    aliases: ["kerala high court", "high court of kerala", "kerala"],
-  },
-  {
-    code: "MADHYA_PRADESH_HC",
-    state: "madhya pradesh",
-    aliases: ["madhya pradesh high court", "high court of madhya pradesh", "madhya pradesh"],
-  },
-  {
-    code: "MADRAS_HC",
-    state: "tamil nadu",
-    aliases: ["madras high court", "madras", "chennai high court", "tamil nadu high court"],
-  },
-  {
-    code: "MANIPUR_HC",
-    state: "manipur",
-    aliases: ["manipur high court", "high court of manipur", "manipur"],
-  },
-  {
-    code: "MEGHALAYA_HC",
-    state: "meghalaya",
-    aliases: ["meghalaya high court", "high court of meghalaya", "meghalaya"],
-  },
-  {
-    code: "ORISSA_HC",
-    state: "odisha",
-    aliases: ["orissa high court", "high court of orissa", "odisha high court", "odisha"],
-  },
-  {
-    code: "PATNA_HC",
-    state: "bihar",
-    aliases: ["patna high court", "patna", "bihar high court"],
-  },
-  {
+  7: {
+    id: 7,
     code: "PUNJAB_HARYANA_HC",
+    level: "HC",
     state: "punjab",
     aliases: [
       "punjab and haryana high court",
@@ -145,32 +162,254 @@ const HIGH_COURT_PATTERNS: HighCourtPattern[] = [
       "chandigarh high court",
     ],
   },
-  {
+  8: {
+    id: 8,
+    code: "MADRAS_HC",
+    level: "HC",
+    state: "tamil nadu",
+    aliases: ["madras high court", "madras", "chennai high court", "tamil nadu high court"],
+  },
+  9: {
+    id: 9,
+    code: "ANDHRA_PRADESH_HC",
+    level: "HC",
+    state: "andhra pradesh",
+    aliases: ["andhra pradesh high court", "high court of andhra pradesh", "andhra pradesh"],
+  },
+  10: {
+    id: 10,
+    code: "KARNATAKA_HC",
+    level: "HC",
+    state: "karnataka",
+    aliases: ["karnataka high court", "high court of karnataka", "karnataka"],
+  },
+  11: {
+    id: 11,
+    code: "CALCUTTA_HC",
+    level: "HC",
+    state: "west bengal",
+    aliases: ["calcutta high court", "calcutta", "kolkata high court", "west bengal high court"],
+  },
+  12: {
+    id: 12,
+    code: "MADHYA_PRADESH_HC",
+    level: "HC",
+    state: "madhya pradesh",
+    aliases: ["madhya pradesh high court", "high court of madhya pradesh", "madhya pradesh"],
+  },
+  13: {
+    id: 13,
+    code: "KERALA_HC",
+    level: "HC",
+    state: "kerala",
+    aliases: ["kerala high court", "high court of kerala", "kerala"],
+  },
+  14: {
+    id: 14,
+    code: "PATNA_HC",
+    level: "HC",
+    state: "bihar",
+    aliases: ["patna high court", "patna", "bihar high court"],
+  },
+  15: {
+    id: 15,
+    code: "ORISSA_HC",
+    level: "HC",
+    state: "odisha",
+    aliases: ["orissa high court", "high court of orissa", "odisha high court", "odisha"],
+  },
+  16: {
+    id: 16,
     code: "RAJASTHAN_HC",
+    level: "HC",
     state: "rajasthan",
     aliases: ["rajasthan high court", "high court of rajasthan", "rajasthan"],
   },
-  {
+  17: {
+    id: 17,
+    code: "JHARKHAND_HC",
+    level: "HC",
+    state: "jharkhand",
+    aliases: ["jharkhand high court", "high court of jharkhand", "jharkhand"],
+  },
+  18: {
+    id: 18,
+    code: "HIMACHAL_PRADESH_HC",
+    level: "HC",
+    state: "himachal pradesh",
+    aliases: ["himachal pradesh high court", "high court of himachal pradesh", "himachal pradesh"],
+  },
+  19: {
+    id: 19,
+    code: "JAMMU_KASHMIR_LADAKH_HC",
+    level: "HC",
+    state: "jammu and kashmir",
+    aliases: [
+      "jammu and kashmir high court",
+      "jammu kashmir high court",
+      "high court of jammu and kashmir",
+      "high court of jammu & kashmir",
+    ],
+  },
+  20: {
+    id: 20,
     code: "SIKKIM_HC",
+    level: "HC",
     state: "sikkim",
     aliases: ["sikkim high court", "high court of sikkim", "sikkim"],
   },
-  {
-    code: "TELANGANA_HC",
-    state: "telangana",
-    aliases: ["telangana high court", "high court for the state of telangana", "telangana"],
+  21: {
+    id: 21,
+    code: "CHHATTISGARH_HC",
+    level: "HC",
+    state: "chhattisgarh",
+    aliases: ["chhattisgarh high court", "high court of chhattisgarh", "chhattisgarh"],
   },
-  {
+  22: {
+    id: 22,
+    code: "UTTARAKHAND_HC",
+    level: "HC",
+    state: "uttarakhand",
+    aliases: [
+      "uttaranchal high court",
+      "uttarakhand high court",
+      "high court of uttarakhand",
+      "high court of uttaranchal",
+      "nainital high court",
+      "uttaranchal",
+      "uttarakhand",
+    ],
+  },
+
+  24: {
+    id: 24,
+    code: "PRIVY_COUNCIL",
+    level: "OTHER",
+    state: null,
+    aliases: ["privy council"],
+  },
+  25: {
+    id: 25,
+    code: "FEDERAL_COURT",
+    level: "OTHER",
+    state: null,
+    aliases: ["federal court"],
+  },
+  26: {
+    id: 26,
+    code: "NAGPUR_HC",
+    level: "OTHER",
+    state: null,
+    aliases: ["nagpur high court", "nagpur"],
+  },
+  27: {
+    id: 27,
+    code: "LAHORE_HC",
+    level: "OTHER",
+    state: null,
+    aliases: ["lahore high court", "lahore"],
+  },
+  28: {
+    id: 28,
+    code: "SINDH_HC",
+    level: "OTHER",
+    state: null,
+    aliases: ["sindh high court", "sindh"],
+  },
+  29: {
+    id: 29,
+    code: "RANGOON_HC",
+    level: "OTHER",
+    state: null,
+    aliases: ["rangoon high court", "rangoon"],
+  },
+  30: {
+    id: 30,
+    code: "PESHAWAR_HC",
+    level: "OTHER",
+    state: null,
+    aliases: ["peshawar high court", "peshawar"],
+  },
+  40: {
+    id: 40,
+    code: "OUDH",
+    level: "OTHER",
+    state: null,
+    aliases: ["oudh", "oudh chief court", "chief court of oudh"],
+  },
+
+  82: {
+    id: 82,
+    code: "MEGHALAYA_HC",
+    level: "HC",
+    state: "meghalaya",
+    aliases: ["meghalaya high court", "high court of meghalaya", "meghalaya"],
+  },
+  83: {
+    id: 83,
     code: "TRIPURA_HC",
+    level: "HC",
     state: "tripura",
     aliases: ["tripura high court", "high court of tripura", "tripura"],
   },
-  {
-    code: "UTTARAKHAND_HC",
-    state: "uttarakhand",
-    aliases: ["uttarakhand high court", "high court of uttarakhand", "uttarakhand", "nainital high court"],
+  84: {
+    id: 84,
+    code: "MANIPUR_HC",
+    level: "HC",
+    state: "manipur",
+    aliases: ["manipur high court", "high court of manipur", "manipur"],
   },
-];
+
+  91: {
+    id: 91,
+    code: "TRAVANCORE_COCHIN_HC",
+    level: "OTHER",
+    state: "kerala",
+    aliases: ["travancore cochin high court", "travancore-cochin", "travancore cochin"],
+  },
+  97: {
+    id: 97,
+    code: "SAURASHTRA_HC",
+    level: "OTHER",
+    state: "gujarat",
+    aliases: ["saurashtra high court", "saurashtra"],
+  },
+  98: {
+    id: 98,
+    code: "KUTCH_HC",
+    level: "OTHER",
+    state: "gujarat",
+    aliases: ["kutch high court", "kutch"],
+  },
+
+  104: {
+    id: 104,
+    code: "TELANGANA_HC",
+    level: "HC",
+    state: "telangana",
+    aliases: ["telangana high court", "high court for the state of telangana", "telangana"],
+  },
+};
+
+const HIGH_COURT_PATTERNS: HighCourtPattern[] = Object.values(COURT_ID_MAP)
+  .filter(
+    (entry): entry is CourtIdEntry & { level: "HC"; state: string } =>
+      entry.level === "HC" && typeof entry.state === "string" && entry.state.length > 0
+  )
+  .map((entry) => ({
+    code: entry.code,
+    state: entry.state,
+    aliases: entry.aliases,
+  }));
+
+const COURT_CODE_TO_IDS: Record<string, number[]> = Object.values(COURT_ID_MAP).reduce(
+  (acc, entry) => {
+    if (!acc[entry.code]) acc[entry.code] = [];
+    acc[entry.code].push(entry.id);
+    return acc;
+  },
+  {} as Record<string, number[]>
+);
 
 const STATE_ALIAS_MAP: Record<string, string> = {
   india: "india",
@@ -311,19 +550,24 @@ function inferCourtFromReporterValues(values: string[]): CanonicalCourt | null {
 function inferCourtFromPrefix(payload: Record<string, unknown>): CanonicalCourt {
   const rawCourt = String(payload.court ?? "").trim();
   const fileName = String(payload.fileName ?? payload.caseId ?? "").trim();
-  const prefix = fileName.charAt(0);
 
-  const prefixMap: Record<string, CanonicalCourt> = {
-    "1": { code: "SC", level: "SC", state: null, rawCourt },
-    "2": { code: "DELHI_HC", level: "HC", state: "delhi", rawCourt },
-    "3": { code: "BOMBAY_HC", level: "HC", state: "maharashtra", rawCourt },
-    "4": { code: "GUJARAT_HC", level: "HC", state: "gujarat", rawCourt },
-  };
+  const numeric = parseCourtId(fileName);
+  if (numeric && numeric > 0) {
+    const inferredCourtId = Math.floor(numeric / 100000);
+    const entry = COURT_ID_MAP[inferredCourtId];
+    if (entry) {
+      return toCanonicalCourt(entry, rawCourt);
+    }
+  }
 
-  return prefixMap[prefix] || { code: null, level: null, state: null, rawCourt };
+  return { code: null, level: null, state: null, rawCourt };
 }
-
 function inferCourtFromText(rawCourt: string): CanonicalCourt | null {
+  const directMatches = findCourtEntriesByText(rawCourt);
+  if (directMatches.length) {
+    return toCanonicalCourt(directMatches[0], rawCourt);
+  }
+
   const normalized = normalizeCourtText(rawCourt);
   if (!normalized) return null;
 
@@ -376,6 +620,9 @@ export function canonicalizeCourt(payload: Record<string, unknown>): CanonicalCo
       .join(" ")
   );
 
+  const fromCourtId = inferCourtFromCourtId(payload);
+  if (fromCourtId) return fromCourtId;
+
   const fromText = inferCourtFromText(rawCourt);
   if (fromText) return fromText;
 
@@ -406,6 +653,7 @@ export function canonicalizeCourt(payload: Record<string, unknown>): CanonicalCo
       rawCourt,
     };
   }
+
 
   const fromPrefix = inferCourtFromPrefix(payload);
   if (fromPrefix.code) return fromPrefix;

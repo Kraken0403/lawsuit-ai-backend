@@ -12,18 +12,53 @@ enum MessageRole {
   ASSISTANT
 }
 
-model User {
-  id             String           @id @default(cuid())
-  email          String           @unique @db.VarChar(320)
-  name           String?          @db.VarChar(120)
-  passwordHash   String           @map("password_hash") @db.VarChar(255)
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+enum ChatMode {
+  JUDGMENT
+  DRAFTING_STUDIO
+  ARGUMENT
+}
 
-  sessions        Session[]
-  conversations   Conversation[]
-  bookmarkedCases BookmarkedCase[]
-  promptRuns      PromptRun[]
+enum DraftTemplateSource {
+  SYSTEM
+  FIRM
+  SESSION_UPLOAD
+}
+
+enum DraftTemplateStrength {
+  STRONG
+  STANDARD
+  BASIC
+  LEGACY
+}
+
+enum DraftDocumentStatus {
+  DRAFT
+  FINAL
+  ARCHIVED
+}
+
+enum DraftBrandingMode {
+  NONE
+  HEADER_FOOTER
+  LETTERHEAD
+}
+
+model User {
+  id                   String            @id @default(cuid())
+  email                String            @unique @db.VarChar(320)
+  name                 String?           @db.VarChar(120)
+  passwordHash         String            @map("password_hash") @db.VarChar(255)
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  sessions             Session[]
+  conversations        Conversation[]
+  bookmarkedCases      BookmarkedCase[]
+  promptRuns           PromptRun[]
+  firmSettings         FirmSettings?
+  ownedDraftTemplates  DraftTemplate[]   @relation("OwnedDraftTemplates")
+  draftDocuments       DraftDocument[]
+  draftAttachments     DraftAttachment[]
 
   @@map("users")
 }
@@ -46,35 +81,38 @@ model Session {
 }
 
 model Conversation {
-  id         String     @id @default(cuid())
-  userId     String     @map("user_id")
-  title      String     @default("New chat") @db.VarChar(200)
-  shareToken String?    @unique @map("share_token") @db.VarChar(128)
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
-  archivedAt DateTime?  @map("archived_at")
+  id               String          @id @default(cuid())
+  userId           String          @map("user_id")
+  title            String          @default("New chat") @db.VarChar(200)
+  chatMode         ChatMode        @default(JUDGMENT) @map("chat_mode")
+  shareToken       String?         @unique @map("share_token") @db.VarChar(128)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  archivedAt       DateTime?       @map("archived_at")
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages   Message[]
-  promptRuns PromptRun[]
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  promptRuns       PromptRun[]
+  draftDocuments   DraftDocument[]
+  draftAttachments DraftAttachment[]
 
-  @@index([userId, updatedAt])
+  @@index([userId, chatMode, updatedAt])
   @@map("conversations")
 }
 
 model Message {
-  id                 String      @id @default(cuid())
-  conversationId     String      @map("conversation_id")
-  role               MessageRole
-  content            String      @db.Text
-  sourcesJson        Json?       @map("sources_json")
-  caseDigestsJson    Json?       @map("case_digests_json")
-  traceJson          Json?       @map("trace_json")
-  createdAt          DateTime    @default(now()) @map("created_at")
+  id                    String      @id @default(cuid())
+  conversationId        String      @map("conversation_id")
+  role                  MessageRole
+  content               String      @db.Text
+  sourcesJson           Json?       @map("sources_json")
+  caseDigestsJson       Json?       @map("case_digests_json")
+  traceJson             Json?       @map("trace_json")
+  createdAt             DateTime    @default(now()) @map("created_at")
 
-  conversation         Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  promptRunsAsUser     PromptRun[]  @relation("UserMessagePromptRuns")
-  promptRunsAsAssistant PromptRun[] @relation("AssistantMessagePromptRuns")
+  conversation          Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  promptRunsAsUser      PromptRun[]  @relation("UserMessagePromptRuns")
+  promptRunsAsAssistant PromptRun[]  @relation("AssistantMessagePromptRuns")
 
   @@index([conversationId, createdAt])
   @@map("messages")
@@ -106,6 +144,7 @@ model PromptRun {
   originalQuery      String    @map("original_query") @db.Text
   effectiveQuery     String?   @map("effective_query") @db.Text
   mode               String?   @db.VarChar(64)
+  chatMode           ChatMode? @map("chat_mode")
   routerJson         Json?     @map("router_json")
   filtersJson        Json?     @map("filters_json")
   notesJson          Json?     @map("notes_json")
@@ -121,6 +160,7 @@ model PromptRun {
 
   @@index([userId, createdAt])
   @@index([conversationId, createdAt])
+  @@index([chatMode, createdAt])
   @@map("prompt_runs")
 }
 
@@ -142,4 +182,156 @@ model CaseSummary {
 
   @@unique([caseId, summaryType, sourceHash], map: "uq_case_summary_case_type_hash")
   @@index([caseId, summaryType], map: "idx_case_summary_case_type")
+}
+
+model FirmSettings {
+  id                        String            @id @default(cuid())
+  userId                    String            @unique @map("user_id")
+  firmName                  String?           @db.VarChar(200)
+  advocateName              String?           @map("advocate_name") @db.VarChar(200)
+  enrollmentNumber          String?           @map("enrollment_number") @db.VarChar(100)
+  address                   String?           @db.Text
+  email                     String?           @db.VarChar(320)
+  phone                     String?           @db.VarChar(50)
+  website                   String?           @db.VarChar(255)
+  logoUrl                   String?           @map("logo_url") @db.VarChar(500)
+  headerText                String?           @map("header_text") @db.Text
+  footerText                String?           @map("footer_text") @db.Text
+  signatureText             String?           @map("signature_text") @db.Text
+
+  draftingBrandingMode      DraftBrandingMode @default(NONE) @map("drafting_branding_mode")
+  draftingHeaderImageUrl    String?           @map("drafting_header_image_url") @db.VarChar(500)
+  draftingFooterImageUrl    String?           @map("drafting_footer_image_url") @db.VarChar(500)
+  draftingLetterheadImageUrl String?          @map("drafting_letterhead_image_url") @db.VarChar(500)
+
+  draftingHeaderHeightPx    Int?              @map("drafting_header_height_px")
+  draftingFooterHeightPx    Int?              @map("drafting_footer_height_px")
+  draftingLetterheadHeightPx Int?             @map("drafting_letterhead_height_px")
+
+  draftingLockBranding      Boolean           @default(true) @map("drafting_lock_branding")
+
+  draftingDefaultTone       String?           @map("drafting_default_tone") @db.VarChar(50)
+  draftingDefaultJurisdiction String?         @map("drafting_default_jurisdiction") @db.VarChar(120)
+  draftingDefaultForum      String?           @map("drafting_default_forum") @db.VarChar(120)
+
+  draftingSignatureImageUrl String?           @map("drafting_signature_image_url") @db.VarChar(500)
+
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("firm_settings")
+}
+
+model DraftTemplate {
+  id                        String                @id @default(cuid())
+  ownerUserId               String?               @map("owner_user_id")
+  source                    DraftTemplateSource
+  title                     String                @db.VarChar(255)
+  family                    String                @db.VarChar(64)
+  subtype                   String?               @db.VarChar(120)
+  jurisdiction              String?               @db.VarChar(120)
+  forum                     String?               @db.VarChar(120)
+  language                  String?               @db.VarChar(50)
+  tagsJson                  Json?                 @map("tags_json")
+  useWhenJson               Json?                 @map("use_when_json")
+  notForJson                Json?                 @map("not_for_json")
+  summary                   String?               @db.Text
+  precedentStrength         DraftTemplateStrength @default(STANDARD) @map("precedent_strength")
+  rawText                   String                @map("raw_text") @db.LongText
+  normalizedText            String?               @map("normalized_text") @db.LongText
+  placeholdersJson          Json?                 @map("placeholders_json")
+  clauseBlocksJson          Json?                 @map("clause_blocks_json")
+  executionRequirementsJson Json?                 @map("execution_requirements_json")
+  riskNotesJson             Json?                 @map("risk_notes_json")
+  sourceRef                 String?               @map("source_ref") @db.VarChar(255)
+  isActive                  Boolean               @default(true) @map("is_active")
+  createdAt                 DateTime              @default(now()) @map("created_at")
+  updatedAt                 DateTime              @updatedAt @map("updated_at")
+
+  owner       User?             @relation("OwnedDraftTemplates", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  attachments DraftAttachment[]
+
+  @@index([source, family, subtype, isActive])
+  @@index([ownerUserId, source, isActive])
+  @@map("draft_templates")
+}
+
+model DraftDocument {
+  id                    String               @id @default(cuid())
+  userId                String               @map("user_id")
+  conversationId        String?              @map("conversation_id")
+  title                 String               @db.VarChar(255)
+  family                String               @db.VarChar(64)
+  subtype               String?              @db.VarChar(120)
+  strategy              String?              @db.VarChar(64)
+  matchLevel            String?              @map("match_level") @db.VarChar(32)
+  sourceTemplateIdsJson Json?                @map("source_template_ids_json")
+  inputDataJson         Json?                @map("input_data_json")
+  draftingPlanJson      Json?                @map("drafting_plan_json")
+  draftMarkdown         String?              @map("draft_markdown") @db.LongText
+  draftHtml             String?              @map("draft_html") @db.LongText
+  exportPdfUrl          String?              @map("export_pdf_url") @db.VarChar(500)
+  exportDocxUrl         String?              @map("export_docx_url") @db.VarChar(500)
+  status                DraftDocumentStatus  @default(DRAFT)
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  editorJson                 Json?    @map("editor_json")
+  unresolvedPlaceholdersJson Json?    @map("unresolved_placeholders_json")
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation?          @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  versions     DraftDocumentVersion[]
+
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("draft_documents")
+}
+
+model DraftAttachment {
+  id             String   @id @default(cuid())
+  userId         String?  @map("user_id")
+  conversationId String?  @map("conversation_id")
+  templateId     String?  @map("template_id")
+  fileName       String   @map("file_name") @db.VarChar(255)
+  mimeType       String   @map("mime_type") @db.VarChar(120)
+  storageUrl     String   @map("storage_url") @db.VarChar(500)
+  extractedText  String?  @map("extracted_text") @db.LongText
+  parsedJson     Json?    @map("parsed_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  template     DraftTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([userId, conversationId, createdAt])
+  @@index([templateId])
+  @@map("draft_attachments")
+}
+
+model DraftDocumentVersion {
+  id                    String   @id @default(cuid())
+  draftDocumentId       String   @map("draft_document_id")
+  versionNumber         Int      @map("version_number")
+  title                 String   @db.VarChar(255)
+  family                String   @db.VarChar(64)
+  subtype               String?  @db.VarChar(120)
+  strategy              String?  @db.VarChar(64)
+  matchLevel            String?  @map("match_level") @db.VarChar(32)
+  sourceTemplateIdsJson Json?    @map("source_template_ids_json")
+  inputDataJson         Json?    @map("input_data_json")
+  draftingPlanJson      Json?    @map("drafting_plan_json")
+  draftMarkdown         String?  @map("draft_markdown") @db.LongText
+  draftHtml             String?  @map("draft_html") @db.LongText
+  createdByUserId       String?  @map("created_by_user_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  editorJson                 Json?    @map("editor_json")
+  unresolvedPlaceholdersJson Json?    @map("unresolved_placeholders_json")
+
+  draftDocument DraftDocument @relation(fields: [draftDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([draftDocumentId, versionNumber], map: "uq_draft_document_version")
+  @@index([draftDocumentId, createdAt], map: "idx_draft_document_versions_doc_created")
+  @@map("draft_document_versions")
 }

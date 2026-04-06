@@ -2,12 +2,16 @@ import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import path from "node:path";
 
 import { chatStreamRouter } from "./routes/chatStream.js";
 import { authRouter } from "./routes/auth.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { casesRouter } from "./routes/cases.js";
+import { draftingRouter } from "./routes/drafting.js";
+import { getUploadsRoot } from "./lib/settingsAssetStorage.js";
+
 const app = express();
 
 const PORT = Number(process.env.PORT || 8787);
@@ -24,8 +28,16 @@ app.use(
 );
 
 app.use(cookieParser());
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "35mb" }));
+app.use(express.urlencoded({ extended: true, limit: "35mb" }));
+
+app.use(
+  "/uploads",
+  express.static(getUploadsRoot(), {
+    fallthrough: false,
+    maxAge: "7d",
+  })
+);
 
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({
@@ -48,6 +60,7 @@ app.use("/api/conversations", conversationsRouter);
 app.use("/api/bookmarks", bookmarksRouter);
 app.use("/api/chat", chatStreamRouter);
 app.use("/api/cases", casesRouter);
+app.use("/api/drafting", draftingRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({

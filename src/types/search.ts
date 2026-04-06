@@ -99,6 +99,15 @@ export type RetrievalFilters = {
   dateFrom?: string | null;
   dateTo?: string | null;
   onlyReported?: boolean;
+
+  // new structured signals
+  originJurisdiction?: string[];
+  lowerCourtHints?: string[];
+
+  // optional normalized/internal fields for future use
+  courtIds?: string[];
+  decisionYearFrom?: number | null;
+  decisionYearTo?: number | null;
 };
 
 export type RouterOutput = {
@@ -127,6 +136,10 @@ export type RouterOutput = {
     sections: string[];
     subjects: string[];
     timeQualifier?: "latest" | "recent" | "historical" | "none";
+
+    // new
+    originJurisdiction: string[];
+    lowerCourtHints: string[];
   };
   retrievalPlan: {
     strategy: QueryStrategy;

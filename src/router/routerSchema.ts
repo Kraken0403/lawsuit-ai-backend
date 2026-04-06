@@ -16,6 +16,14 @@ Rules:
 - If the query asks for full text / complete judgment, set expandFullCase = true and strategy = full_judgment.
 - If the query asks for citation / court / judges / date / subject / advocates / case number etc, use metadata_lookup.
 - If the query is ambiguous and cannot be safely resolved from the provided state, set clarificationNeeded = true.
+- If the user explicitly names a court or forum (for example Supreme Court, Delhi High Court, Gujarat High Court), copy it into entities.courts and retrievalPlan.filters.courts.
+- Never broaden an explicit court constraint. If the query says Supreme Court, do not generalize it to all courts or to India generally.
+- For latest/recent queries with an explicit court constraint, preserve the court constraint and apply recency through filters/strategy, not by dropping the court.
+- If the query distinguishes the final deciding court from the originating state or lower forum, preserve both.
+- For phrases such as "from Gujarat", "happened in Gujarat", "arising from Gujarat", "originating in Gujarat", "went to Supreme Court from Gujarat", put "Gujarat" into entities.originJurisdiction and retrievalPlan.filters.originJurisdiction.
+- Do not replace an explicit origin state like Gujarat with "India".
+- For phrases such as "trial court", "civil court", "subordinate court", "sessions court", "district court", "judicial officer", copy those hints into entities.lowerCourtHints and retrievalPlan.filters.lowerCourtHints.
+- If the deciding court is Supreme Court and the origin is Gujarat, preserve both: courts=["Supreme Court"], originJurisdiction=["Gujarat"].
 - Confidence must be between 0 and 1.
 `;
 
@@ -88,7 +96,7 @@ export const routerJsonSchema = {
       entities: {
         type: "object",
         additionalProperties: false,
-        required: [
+                required: [
           "caseTarget",
           "comparisonTargets",
           "citations",
@@ -99,6 +107,8 @@ export const routerJsonSchema = {
           "sections",
           "subjects",
           "timeQualifier",
+          "originJurisdiction",
+          "lowerCourtHints",
         ],
         properties: {
           caseTarget: {
@@ -157,6 +167,14 @@ export const routerJsonSchema = {
             type: "string",
             enum: ["latest", "recent", "historical", "none"],
           },
+          originJurisdiction: {
+            type: "array",
+            items: { type: "string" },
+          },
+          lowerCourtHints: {
+            type: "array",
+            items: { type: "string" },
+          },
         },
       },
       retrievalPlan: {
@@ -192,6 +210,8 @@ export const routerJsonSchema = {
               "dateFrom",
               "dateTo",
               "onlyReported",
+              "originJurisdiction",
+              "lowerCourtHints",
             ],
             properties: {
               jurisdiction: {
@@ -222,6 +242,14 @@ export const routerJsonSchema = {
               },
               onlyReported: {
                 type: "boolean",
+              },
+              originJurisdiction: {
+                type: "array",
+                items: { type: "string" },
+              },
+              lowerCourtHints: {
+                type: "array",
+                items: { type: "string" },
               },
             },
           },

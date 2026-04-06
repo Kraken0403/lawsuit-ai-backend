@@ -29,6 +29,10 @@ const INDEX_JOBS: IndexJob[] = [
     },
   },
   {
+    field_name: "courtId",
+    field_schema: "keyword",
+  },
+  {
     field_name: "citation",
     field_schema: "keyword",
   },
@@ -63,6 +67,14 @@ const INDEX_JOBS: IndexJob[] = [
   {
     field_name: "caseType",
     field_schema: "keyword",
+  },
+  {
+    field_name: "decisionDate",
+    field_schema: "datetime",
+  },
+  {
+    field_name: "decisionYear",
+    field_schema: "integer",
   },
   {
     field_name: "caseId",

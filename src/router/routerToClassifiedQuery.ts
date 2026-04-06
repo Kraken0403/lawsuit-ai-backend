@@ -28,16 +28,20 @@ import type {
   }
   
   function buildReferenceTerms(router: RouterOutput): string[] {
-    return unique([
-      router.resolvedQuery,
-      router.entities.caseTarget,
-      ...router.entities.comparisonTargets,
-      ...router.entities.citations,
-      ...router.entities.statutes,
-      ...router.entities.sections,
-      ...router.entities.subjects,
-    ]);
-  }
+  return unique([
+    router.resolvedQuery,
+    router.entities.caseTarget,
+    ...router.entities.comparisonTargets,
+    ...router.entities.citations,
+    ...router.entities.statutes,
+    ...router.entities.sections,
+    ...router.entities.subjects,
+    ...router.entities.jurisdiction,
+    ...router.entities.courts,
+    ...router.entities.originJurisdiction,
+    ...router.entities.lowerCourtHints,
+  ]);
+}
   
   export function routerToClassifiedQuery(params: {
     originalQuery: string;

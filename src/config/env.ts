@@ -43,5 +43,7 @@ export const env = {
       process.env.OPENAI_ROUTER_MODEL ||
       process.env.LLM_ROUTER_MODEL ||
       "gpt-4.1-mini",
+    transcriptionModel:
+      process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe",
   },
 };
