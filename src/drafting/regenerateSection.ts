@@ -123,7 +123,7 @@ export async function regenerateDraftSection({
 
   const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const updatedDocument = await tx.draftDocument.update({
       where: { id: document.id },
       data: {

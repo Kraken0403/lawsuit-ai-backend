@@ -34,7 +34,7 @@ async function main() {
   console.log("CASE DIGESTS");
   console.log("=".repeat(100));
 
-  answer.caseDigests.forEach((digest, idx) => {
+  answer.caseDigests.forEach((digest: any, idx: any) => {
     console.log(`\nCase ${idx + 1}`);
     console.log(`caseId   : ${digest.caseId}`);
     console.log(`title    : ${digest.title}`);

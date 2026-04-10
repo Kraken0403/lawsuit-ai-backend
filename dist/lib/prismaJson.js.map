@@ -1,0 +1,1 @@
+{"version":3,"file":"prismaJson.js","sourceRoot":"","sources":["../../src/lib/prismaJson.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,+BAA+B,CAAC;AAMvD,MAAM,UAAU,mBAAmB,CAAC,KAAc;IAChD,IAAI,KAAK,IAAI,IAAI,EAAE,CAAC;QAClB,OAAO,MAAM,CAAC,MAAM,CAAC;IACvB,CAAC;IAED,OAAO,KAA8B,CAAC;AACxC,CAAC"}

@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import prisma from "../lib/prisma.js";
 import { hashSessionToken, SESSION_COOKIE_NAME } from "../utils/auth.js";
 
-export type AuthenticatedRequest = Request & {
+export type AuthenticatedRequest = Request<Record<string, string>> & {
   auth?: {
     userId: string;
     sessionId: string;

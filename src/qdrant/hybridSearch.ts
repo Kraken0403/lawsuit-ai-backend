@@ -786,9 +786,9 @@ export async function runHybridSearch(
 
   return points
     .map(toChunkHit)
-    .map((hit) => ({
+    .map((hit: any) => ({
       ...hit,
       score: postScoreHit(hit, classified),
     }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a: any, b: any) => b.score - a.score);
 }

@@ -14,7 +14,6 @@ import type {
 import {
   classifyQuery,
   detectMetadataField,
-  stripMetadataInstruction,
 } from "../query/classify.js";
 import { dedupeChunks } from "../ranking/dedupe.js";
 import { groupHitsByCase } from "../ranking/groupCases.js";
@@ -385,7 +384,7 @@ function isAcceptableResolvedMatch(
 
 function normalizeMessages(messages: ChatTurn[] = []): ChatTurn[] {
   return (Array.isArray(messages) ? messages : [])
-    .map((m) => ({
+    .map((m): ChatTurn => ({
       role:
         m?.role === "assistant"
           ? "assistant"

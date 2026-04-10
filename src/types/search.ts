@@ -1,4 +1,5 @@
 export type QueryIntent =
+  | "hybrid"
   | "case_lookup"
   | "metadata_lookup"
   | "full_judgment"

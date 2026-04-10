@@ -77,7 +77,7 @@ async function fetchCaseChunks(
   }
 
   const allPoints: any[] = [];
-  let offset: string | number | undefined = undefined;
+  let offset: string | number | Record<string, unknown> | undefined = undefined;
   const seenOffsets = new Set<string>();
 
   while (allPoints.length < maxChunks) {

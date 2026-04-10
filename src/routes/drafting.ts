@@ -25,6 +25,7 @@ import {
   getDraftingSettingsFieldForKind,
   type DraftingAssetKind,
 } from "../lib/settingsAssetStorage.js";
+import { toNullableJsonInput } from "../lib/prismaJson.js";
 
 import { generateDraftPdfBuffer } from "../drafting/pdfExport.js";
 
@@ -656,13 +657,13 @@ draftingRouter.post("/documents", async (req: AuthenticatedRequest, res, next) =
           subtype: compact(req.body?.subtype) || null,
           strategy: compact(req.body?.strategy) || null,
           matchLevel: compact(req.body?.matchLevel) || null,
-          sourceTemplateIdsJson: sourceTemplateIds,
-          inputDataJson,
-          draftingPlanJson,
+          sourceTemplateIdsJson: toNullableJsonInput(sourceTemplateIds),
+          inputDataJson: toNullableJsonInput(inputDataJson),
+          draftingPlanJson: toNullableJsonInput(draftingPlanJson),
           draftMarkdown,
           draftHtml,
-          editorJson,
-          unresolvedPlaceholdersJson: unresolvedPlaceholders,
+          editorJson: toNullableJsonInput(editorJson),
+          unresolvedPlaceholdersJson: toNullableJsonInput(unresolvedPlaceholders),
           status:
             req.body?.status === "FINAL" || req.body?.status === "ARCHIVED"
               ? req.body.status
@@ -680,13 +681,17 @@ draftingRouter.post("/documents", async (req: AuthenticatedRequest, res, next) =
             subtype: document.subtype,
             strategy: document.strategy,
             matchLevel: document.matchLevel,
-            sourceTemplateIdsJson: document.sourceTemplateIdsJson,
-            inputDataJson: document.inputDataJson,
-            draftingPlanJson: document.draftingPlanJson,
+            sourceTemplateIdsJson: toNullableJsonInput(
+              document.sourceTemplateIdsJson
+            ),
+            inputDataJson: toNullableJsonInput(document.inputDataJson),
+            draftingPlanJson: toNullableJsonInput(document.draftingPlanJson),
             draftMarkdown: document.draftMarkdown,
             draftHtml: document.draftHtml,
-            editorJson: document.editorJson,
-            unresolvedPlaceholdersJson: document.unresolvedPlaceholdersJson,
+            editorJson: toNullableJsonInput(document.editorJson),
+            unresolvedPlaceholdersJson: toNullableJsonInput(
+              document.unresolvedPlaceholdersJson
+            ),
             createdByUserId: req.auth!.userId,
           },
         });
@@ -910,7 +915,7 @@ draftingRouter.post("/uploads/:id/save-as-template", async (req: AuthenticatedRe
           notForJson: [],
           placeholdersJson: [],
           clauseBlocksJson: [],
-          executionRequirementsJson: null,
+          executionRequirementsJson: toNullableJsonInput(null),
           riskNotesJson: [],
           sourceRef: attachment.fileName,
           isActive: true,
@@ -1407,14 +1412,14 @@ draftingRouter.post("/documents/:id/fill-fields", async (req: AuthenticatedReque
         where: { id: document.id },
         data: {
           draftMarkdown: updatedMarkdown,
-          editorJson: null,
-          unresolvedPlaceholdersJson: unresolvedPlaceholders,
-          inputDataJson: {
+          editorJson: toNullableJsonInput(null),
+          unresolvedPlaceholdersJson: toNullableJsonInput(unresolvedPlaceholders),
+          inputDataJson: toNullableJsonInput({
             ...(document.inputDataJson && typeof document.inputDataJson === "object"
               ? document.inputDataJson
               : {}),
             filledValues: values,
-          },
+          }),
         },
       });
 
@@ -1430,13 +1435,19 @@ draftingRouter.post("/documents/:id/fill-fields", async (req: AuthenticatedReque
             subtype: updatedDocument.subtype,
             strategy: updatedDocument.strategy,
             matchLevel: updatedDocument.matchLevel,
-            sourceTemplateIdsJson: updatedDocument.sourceTemplateIdsJson,
-            inputDataJson: updatedDocument.inputDataJson,
-            draftingPlanJson: updatedDocument.draftingPlanJson,
+            sourceTemplateIdsJson: toNullableJsonInput(
+              updatedDocument.sourceTemplateIdsJson
+            ),
+            inputDataJson: toNullableJsonInput(updatedDocument.inputDataJson),
+            draftingPlanJson: toNullableJsonInput(
+              updatedDocument.draftingPlanJson
+            ),
             draftMarkdown: updatedDocument.draftMarkdown,
             draftHtml: updatedDocument.draftHtml,
-            editorJson: updatedDocument.editorJson,
-            unresolvedPlaceholdersJson: updatedDocument.unresolvedPlaceholdersJson,
+            editorJson: toNullableJsonInput(updatedDocument.editorJson),
+            unresolvedPlaceholdersJson: toNullableJsonInput(
+              updatedDocument.unresolvedPlaceholdersJson
+            ),
             createdByUserId: req.auth!.userId,
           },
         });

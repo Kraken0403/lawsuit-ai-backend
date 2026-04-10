@@ -11,6 +11,11 @@ export const bookmarksRouter = express.Router();
 bookmarksRouter.use(optionalAuth);
 bookmarksRouter.use(requireAuth);
 
+function getSingleParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
 function makeFingerprint(title: string, citation: string) {
   return `${String(title || "").trim()}|${String(citation || "").trim()}`;
 }

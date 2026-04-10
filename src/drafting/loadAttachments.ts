@@ -11,6 +11,13 @@ export type LoadedDraftAttachment = {
   parsedJson: Record<string, unknown> | null;
 };
 
+type AttachmentTemplateInput = {
+  id: string;
+  fileName: string;
+  extractedText: string;
+  parsedJson?: Record<string, unknown> | null;
+};
+
 export async function loadDraftAttachments(params: {
   userId: string;
   attachmentIds?: string[];
@@ -40,7 +47,7 @@ export async function loadDraftAttachments(params: {
   });
 
   return attachments
-    .map((item) => ({
+    .map((item: any) => ({
       id: item.id,
       fileName: item.fileName,
       mimeType: item.mimeType,
@@ -54,11 +61,11 @@ export async function loadDraftAttachments(params: {
           ? (item.parsedJson as Record<string, unknown>)
           : null,
     }))
-    .filter((item) => item.extractedText);
+    .filter((item: any) => item.extractedText);
 }
 
 export function buildAttachmentTemplateCandidates(params: {
-  attachments: LoadedDraftAttachment[];
+  attachments: AttachmentTemplateInput[];
   query: string;
   familyHint?: string | null;
   directUseRequested: boolean;
