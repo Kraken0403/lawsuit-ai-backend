@@ -45,9 +45,15 @@ enum DraftBrandingMode {
 
 model User {
   id                   String            @id @default(cuid())
-  email                String            @unique @db.VarChar(320)
+  externalUserId       String?           @unique @map("external_user_id") @db.VarChar(120)
+  authProvider         String            @default("local") @map("auth_provider") @db.VarChar(50)
+  username             String?           @db.VarChar(120)
+  email                String?           @unique @db.VarChar(320)
   name                 String?           @db.VarChar(120)
-  passwordHash         String            @map("password_hash") @db.VarChar(255)
+  passwordHash         String?           @map("password_hash") @db.VarChar(255)
+  hasAiAccess          Boolean           @default(true) @map("has_ai_access")
+  subscriptionStatus   String?           @map("subscription_status") @db.VarChar(50)
+  allowedCourtIdsJson  Json?             @map("allowed_court_ids_json")
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
 

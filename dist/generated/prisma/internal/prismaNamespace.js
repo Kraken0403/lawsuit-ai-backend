@@ -91,9 +91,15 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 });
 export const UserScalarFieldEnum = {
     id: 'id',
+    externalUserId: 'externalUserId',
+    authProvider: 'authProvider',
+    username: 'username',
     email: 'email',
     name: 'name',
     passwordHash: 'passwordHash',
+    hasAiAccess: 'hasAiAccess',
+    subscriptionStatus: 'subscriptionStatus',
+    allowedCourtIdsJson: 'allowedCourtIdsJson',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };
@@ -291,15 +297,28 @@ export const NullableJsonNullValueInput = {
 export const JsonNullValueInput = {
     JsonNull: JsonNull
 };
+export const JsonNullValueFilter = {
+    DbNull: DbNull,
+    JsonNull: JsonNull,
+    AnyNull: AnyNull
+};
+export const QueryMode = {
+    default: 'default',
+    insensitive: 'insensitive'
+};
 export const NullsOrder = {
     first: 'first',
     last: 'last'
 };
 export const UserOrderByRelevanceFieldEnum = {
     id: 'id',
+    externalUserId: 'externalUserId',
+    authProvider: 'authProvider',
+    username: 'username',
     email: 'email',
     name: 'name',
-    passwordHash: 'passwordHash'
+    passwordHash: 'passwordHash',
+    subscriptionStatus: 'subscriptionStatus'
 };
 export const SessionOrderByRelevanceFieldEnum = {
     id: 'id',
@@ -313,15 +332,6 @@ export const ConversationOrderByRelevanceFieldEnum = {
     userId: 'userId',
     title: 'title',
     shareToken: 'shareToken'
-};
-export const JsonNullValueFilter = {
-    DbNull: DbNull,
-    JsonNull: JsonNull,
-    AnyNull: AnyNull
-};
-export const QueryMode = {
-    default: 'default',
-    insensitive: 'insensitive'
 };
 export const MessageOrderByRelevanceFieldEnum = {
     id: 'id',
