@@ -240,6 +240,7 @@ model CaseSummary {
 
   @@unique([caseId, summaryType, sourceHash], map: "uq_case_summary_case_type_hash")
   @@index([caseId, summaryType], map: "idx_case_summary_case_type")
+  @@map("casesummary")
 }
 
 model FirmSettings {
