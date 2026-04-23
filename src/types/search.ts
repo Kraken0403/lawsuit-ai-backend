@@ -41,6 +41,8 @@ export type SearchInput = {
   query: string;
   messages?: ChatTurn[];
   conversationId?: string;
+  allowedCourtIds?: number[];
+  selectedCourtIds?: number[];
 };
 
 export type ChatCaseDigest = {
@@ -101,12 +103,10 @@ export type RetrievalFilters = {
   dateTo?: string | null;
   onlyReported?: boolean;
 
-  // new structured signals
   originJurisdiction?: string[];
   lowerCourtHints?: string[];
 
-  // optional normalized/internal fields for future use
-  courtIds?: string[];
+  courtIds?: number[];
   decisionYearFrom?: number | null;
   decisionYearTo?: number | null;
 };
@@ -137,8 +137,6 @@ export type RouterOutput = {
     sections: string[];
     subjects: string[];
     timeQualifier?: "latest" | "recent" | "historical" | "none";
-
-    // new
     originJurisdiction: string[];
     lowerCourtHints: string[];
   };

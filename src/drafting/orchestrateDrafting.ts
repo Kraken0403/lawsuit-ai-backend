@@ -5,11 +5,19 @@ import { buildClarifyingResponse } from "./questionnaire.js";
 import { generateDraftFromPlan } from "./generateDraft.js";
 import type { DraftingExecutionResult } from "./types.js";
 
+type CurrentDraftContext = {
+  id?: string | null;
+  title?: string | null;
+  draftText?: string | null;
+  filledValues?: Record<string, string> | null;
+};
+
 type Input = {
   userId: string;
   query: string;
   messages?: ChatTurn[];
   attachmentIds?: string[];
+  currentDocumentContext?: CurrentDraftContext | null;
 };
 
 export async function orchestrateDrafting({
@@ -17,6 +25,7 @@ export async function orchestrateDrafting({
   query,
   messages = [],
   attachmentIds = [],
+  currentDocumentContext = null,
 }: Input): Promise<DraftingExecutionResult> {
   const cleanAttachmentIds = Array.isArray(attachmentIds)
     ? attachmentIds.map((item) => String(item || "").trim()).filter(Boolean)
@@ -49,6 +58,20 @@ export async function orchestrateDrafting({
     })),
   });
 
+  // Log plan summary for debugging title/template selection
+  try {
+    console.log("[drafting] plan.summary", {
+      resolvedQuery: plan.resolvedQuery,
+      detectedFamily: plan.detectedFamily,
+      strategy: plan.strategy,
+      matchLevel: plan.matchLevel,
+      templateCandidates: plan.templateCandidates?.map((t: any) => ({ id: t.id, title: t.title, source: t.source, score: t.score })) || [],
+      extractedFactsKeys: Object.keys(plan.extractedFacts || {}),
+    });
+  } catch (err: any) {
+    console.error("[drafting] failed to log plan:", err?.message || err);
+  }
+
   const sources = plan.templateCandidates.slice(0, 3).map((item) => ({
     title: item.title,
     citation: `${item.family}${item.subtype ? ` / ${item.subtype}` : ""}`,
@@ -75,7 +98,15 @@ export async function orchestrateDrafting({
     query,
     plan,
     messages,
+    currentDocumentContext,
   });
+
+  // Log draft summary excerpt
+  try {
+    console.log("[drafting] generated summary (excerpt):", String(summary || "").slice(0, 800));
+  } catch (err: any) {
+    console.error("[drafting] failed to log summary:", err?.message || err);
+  }
 
   return {
     mode: "drafting_studio",

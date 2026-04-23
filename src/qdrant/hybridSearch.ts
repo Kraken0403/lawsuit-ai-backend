@@ -778,17 +778,22 @@ export async function runHybridSearch(
     queryRequest.filter = payloadFilter;
   }
 
-  const results = await qdrant.query(env.qdrant.collection, queryRequest);
-
-  const points = Array.isArray((results as any).points)
-    ? (results as any).points
-    : (results as any);
-
-  return points
+  let pointsRaw: any[] = [];
+  try {
+    const results = await qdrant.query(env.qdrant.collection, queryRequest);
+    pointsRaw = Array.isArray((results as any).points) ? (results as any).points : (results as any);
+  } catch (err: any) {
+    console.error("qdrant.query failed in runHybridSearch:", err?.message || err);
+    // On qdrant failure, return empty result set instead of throwing.
+    return [];
+  }
+  const points = pointsRaw
     .map(toChunkHit)
     .map((hit: any) => ({
       ...hit,
       score: postScoreHit(hit, classified),
     }))
     .sort((a: any, b: any) => b.score - a.score);
+
+  return points;
 }

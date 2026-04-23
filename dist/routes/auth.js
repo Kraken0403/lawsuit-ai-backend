@@ -3,7 +3,98 @@ import prisma from "../lib/prisma.js";
 import { clearSessionCookie, createSessionToken, getSessionExpiryDate, hashPassword, hashSessionToken, normalizeEmail, setSessionCookie, verifyPassword, } from "../utils/auth.js";
 import { optionalAuth, requireAuth, } from "../middleware/auth.js";
 import { verifyHs256SsoToken } from "../services/ssoTokenService.js";
+import { normalizeAllowedCourts } from "../utils/allowedCourts.js";
 export const authRouter = express.Router();
+const LOCAL_AUTH_DISABLED = process.env.DISABLE_LOCAL_AUTH !== "false";
+authRouter.get("/dev-sso-page", (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+        return res.status(404).send("Not found");
+    }
+    res.type("html").send(`
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Local SSO Login</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f8fafc;
+        margin: 0;
+        padding: 40px;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      }
+      h1 {
+        margin-top: 0;
+        font-size: 24px;
+      }
+      p {
+        color: #475569;
+      }
+      textarea {
+        width: 100%;
+        min-height: 260px;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 13px;
+        box-sizing: border-box;
+        resize: vertical;
+      }
+      button {
+        margin-top: 16px;
+        background: #0f172a;
+        color: white;
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 18px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #1e293b;
+      }
+      .hint {
+        margin-top: 16px;
+        font-size: 13px;
+        color: #64748b;
+      }
+      code {
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Local SSO Login</h1>
+      <p>Paste the generated JWT below and submit it to the backend SSO route.</p>
+
+      <form method="POST" action="/api/auth/sso-login">
+        <textarea name="token" placeholder="Paste SSO JWT here"></textarea>
+        <br />
+        <button type="submit">Login with SSO</button>
+      </form>
+
+      <div class="hint">
+        Backend: <code>http://localhost:8787</code><br />
+        Frontend redirect should point to: <code>http://localhost:5173</code>
+      </div>
+    </div>
+  </body>
+</html>
+  `);
+});
 function getRequestIp(req) {
     const forwarded = req.headers["x-forwarded-for"];
     if (typeof forwarded === "string" && forwarded.trim()) {
@@ -160,6 +251,12 @@ authRouter.post("/sso-login", async (req, res, next) => {
 });
 authRouter.post("/register", async (req, res, next) => {
     try {
+        if (LOCAL_AUTH_DISABLED) {
+            return res.status(403).json({
+                ok: false,
+                error: "Direct registration is disabled. Please use SSO from LawSuit Case Finder.",
+            });
+        }
         const email = normalizeEmail(req.body?.email);
         const password = String(req.body?.password || "");
         const name = String(req.body?.name || "").trim();
@@ -197,6 +294,7 @@ authRouter.post("/register", async (req, res, next) => {
                 id: true,
                 email: true,
                 name: true,
+                creditsRemaining: true,
                 createdAt: true,
             },
         });
@@ -212,6 +310,12 @@ authRouter.post("/register", async (req, res, next) => {
 });
 authRouter.post("/login", async (req, res, next) => {
     try {
+        if (LOCAL_AUTH_DISABLED) {
+            return res.status(403).json({
+                ok: false,
+                error: "Direct login is disabled. Please use SSO from LawSuit Case Finder.",
+            });
+        }
         const email = normalizeEmail(req.body?.email);
         const password = String(req.body?.password || "");
         if (!email || !password) {
@@ -227,6 +331,7 @@ authRouter.post("/login", async (req, res, next) => {
                 email: true,
                 name: true,
                 passwordHash: true,
+                creditsRemaining: true,
                 createdAt: true,
             },
         });
@@ -250,6 +355,7 @@ authRouter.post("/login", async (req, res, next) => {
                 id: user.id,
                 email: user.email,
                 name: user.name,
+                creditsRemaining: user.creditsRemaining ?? 0,
                 createdAt: user.createdAt,
             },
         });
@@ -288,6 +394,7 @@ authRouter.get("/me", optionalAuth, requireAuth, async (req, res, next) => {
                 username: true,
                 email: true,
                 name: true,
+                creditsRemaining: true,
                 hasAiAccess: true,
                 subscriptionStatus: true,
                 allowedCourtIdsJson: true,
@@ -303,7 +410,10 @@ authRouter.get("/me", optionalAuth, requireAuth, async (req, res, next) => {
         }
         res.status(200).json({
             ok: true,
-            user,
+            user: {
+                ...user,
+                allowedCourts: normalizeAllowedCourts(user.allowedCourtIdsJson),
+            },
         });
     }
     catch (error) {

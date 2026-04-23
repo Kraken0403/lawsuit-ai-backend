@@ -15,6 +15,7 @@ import {
 import {
   applyFieldValuesToMarkdown,
   extractUnresolvedPlaceholders,
+  normalizeDraftPlaceholders,
 } from "../drafting/placeholders.js";
 
 import { regenerateDraftSection } from "../drafting/regenerateSection.js";
@@ -33,6 +34,22 @@ import { generateDraftDocxBuffer } from "../drafting/docxExport.js";
 
 import multer from "multer";
 import { transcribeAudioBuffer } from "../services/audioTranscriptionService.js";
+
+
+function simpleMarkdownToHtml(md: string) {
+  const source = String(md || "").trim();
+  if (!source) return "";
+
+  const escaped = source
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return escaped
+    .split(/\n{2,}/)
+    .map((block) => `<p>${block.replace(/\n/g, "<br />")}</p>`)
+    .join("\n");
+}
 
 export const draftingRouter = express.Router();
 
@@ -630,7 +647,9 @@ draftingRouter.post("/documents", async (req: AuthenticatedRequest, res, next) =
         : null;
 
     const draftMarkdown =
-      typeof req.body?.draftMarkdown === "string" ? req.body.draftMarkdown : null;
+      typeof req.body?.draftMarkdown === "string"
+        ? normalizeDraftPlaceholders(req.body.draftMarkdown)
+        : null;
 
     const draftHtml =
       typeof req.body?.draftHtml === "string" ? req.body.draftHtml : null;
@@ -972,7 +991,9 @@ draftingRouter.patch("/documents/:id", async (req: AuthenticatedRequest, res, ne
 
     if (req.body?.draftMarkdown !== undefined) {
       updateData.draftMarkdown =
-        typeof req.body.draftMarkdown === "string" ? req.body.draftMarkdown : null;
+        typeof req.body.draftMarkdown === "string"
+          ? normalizeDraftPlaceholders(req.body.draftMarkdown)
+          : null;
     }
 
     if (req.body?.draftHtml !== undefined) {
@@ -1392,9 +1413,10 @@ draftingRouter.post("/documents/:id/fill-fields", async (req: AuthenticatedReque
     }
 
     const updatedMarkdown = applyFieldValuesToMarkdown(
-      String(document.draftMarkdown || ""),
+      normalizeDraftPlaceholders(String(document.draftMarkdown || "")),
       values
     );
+    const updatedHtml = simpleMarkdownToHtml(updatedMarkdown);
 
     const unresolvedPlaceholders = extractUnresolvedPlaceholders(updatedMarkdown);
 
@@ -1412,6 +1434,7 @@ draftingRouter.post("/documents/:id/fill-fields", async (req: AuthenticatedReque
         where: { id: document.id },
         data: {
           draftMarkdown: updatedMarkdown,
+          draftHtml: updatedHtml,
           editorJson: toNullableJsonInput(null),
           unresolvedPlaceholdersJson: toNullableJsonInput(unresolvedPlaceholders),
           inputDataJson: toNullableJsonInput({

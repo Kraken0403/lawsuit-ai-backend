@@ -12,6 +12,12 @@ enum MessageRole {
   ASSISTANT
 }
 
+enum FeedbackReaction {
+  UP
+  DOWN
+}
+
+
 enum ChatMode {
   JUDGMENT
   DRAFTING_STUDIO
@@ -56,6 +62,7 @@ model User {
   allowedCourtIdsJson  Json?             @map("allowed_court_ids_json")
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
+  creditsRemaining     Int               @default(30) @map("credits_remaining")
 
   sessions             Session[]
   conversations        Conversation[]
@@ -65,6 +72,7 @@ model User {
   ownedDraftTemplates  DraftTemplate[]   @relation("OwnedDraftTemplates")
   draftDocuments       DraftDocument[]
   draftAttachments     DraftAttachment[]
+  suggestedCaseFeedbacks SuggestedCaseFeedback[]
 
   @@map("users")
 }
@@ -106,6 +114,48 @@ model Conversation {
   @@map("conversations")
 }
 
+model AssistantMessageFeedback {
+  id                 String            @id @default(cuid())
+  userId             String?           @map("user_id")
+  conversationId     String?           @map("conversation_id")
+  mode               String            @db.VarChar(32)
+  caseId             String?           @map("case_id") @db.VarChar(64)
+  userMessageId      String?           @map("user_message_id")
+  assistantMessageId String            @map("assistant_message_id")
+  reaction           FeedbackReaction?
+  comment            String?           @db.Text
+  fingerprint        String?           @db.VarChar(500)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  @@unique([userId, assistantMessageId], map: "uq_assistant_feedback_user_message")
+  @@index([assistantMessageId])
+  @@index([caseId])
+  @@map("assistant_message_feedback")
+}
+
+model SuggestedCaseFeedback {
+  id                 String   @id @default(cuid())
+  userId             String?  @map("user_id")
+  caseId             String   @map("case_id") @db.VarChar(64)
+  fingerprint        String?  @db.VarChar(500)
+  feedback           String   @db.VarChar(16)
+  comment            String?  @db.Text
+  userMessageId      String?  @map("user_message_id")
+  assistantMessageId String?  @map("assistant_message_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userMessage      Message? @relation("FeedbackUserMessage", fields: [userMessageId], references: [id], onDelete: SetNull)
+  assistantMessage Message? @relation("FeedbackAssistantMessage", fields: [assistantMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, caseId, assistantMessageId], map: "uq_suggested_case_feedback_user_case_assistant")
+  @@index([userId, createdAt])
+  @@index([caseId])
+  @@map("suggested_case_feedback")
+}
+
 model Message {
   id                    String      @id @default(cuid())
   conversationId        String      @map("conversation_id")
@@ -119,6 +169,8 @@ model Message {
   conversation          Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   promptRunsAsUser      PromptRun[]  @relation("UserMessagePromptRuns")
   promptRunsAsAssistant PromptRun[]  @relation("AssistantMessagePromptRuns")
+  feedbackAsUserMessage  SuggestedCaseFeedback[] @relation("FeedbackUserMessage")
+  feedbackAsAssistantMessage SuggestedCaseFeedback[] @relation("FeedbackAssistantMessage")
 
   @@index([conversationId, createdAt])
   @@map("messages")
@@ -341,3 +393,4 @@ model DraftDocumentVersion {
   @@index([draftDocumentId, createdAt], map: "idx_draft_document_versions_doc_created")
   @@map("draft_document_versions")
 }
+

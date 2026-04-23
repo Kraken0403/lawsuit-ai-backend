@@ -3,7 +3,7 @@ import prisma from "../lib/prisma.js";
 import { optionalAuth, requireAuth, } from "../middleware/auth.js";
 import { searchDraftTemplates } from "../drafting/templateSearch.js";
 import { compact, normalizeText, toStringArray, } from "../drafting/utils.js";
-import { applyFieldValuesToMarkdown, extractUnresolvedPlaceholders, } from "../drafting/placeholders.js";
+import { applyFieldValuesToMarkdown, extractUnresolvedPlaceholders, normalizeDraftPlaceholders, } from "../drafting/placeholders.js";
 import { regenerateDraftSection } from "../drafting/regenerateSection.js";
 import { buildPublicAssetUrl, createDraftingSettingsAssetUpload, deleteLocalAssetByPublicUrl, getDraftingSettingsFieldForKind, } from "../lib/settingsAssetStorage.js";
 import { toNullableJsonInput } from "../lib/prismaJson.js";
@@ -11,6 +11,19 @@ import { generateDraftPdfBuffer } from "../drafting/pdfExport.js";
 import { generateDraftDocxBuffer } from "../drafting/docxExport.js";
 import multer from "multer";
 import { transcribeAudioBuffer } from "../services/audioTranscriptionService.js";
+function simpleMarkdownToHtml(md) {
+    const source = String(md || "").trim();
+    if (!source)
+        return "";
+    const escaped = source
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    return escaped
+        .split(/\n{2,}/)
+        .map((block) => `<p>${block.replace(/\n/g, "<br />")}</p>`)
+        .join("\n");
+}
 export const draftingRouter = express.Router();
 draftingRouter.use(optionalAuth);
 draftingRouter.use(requireAuth);
@@ -502,7 +515,9 @@ draftingRouter.post("/documents", async (req, res, next) => {
         const draftingPlanJson = req.body?.draftingPlan && typeof req.body.draftingPlan === "object"
             ? req.body.draftingPlan
             : null;
-        const draftMarkdown = typeof req.body?.draftMarkdown === "string" ? req.body.draftMarkdown : null;
+        const draftMarkdown = typeof req.body?.draftMarkdown === "string"
+            ? normalizeDraftPlaceholders(req.body.draftMarkdown)
+            : null;
         const draftHtml = typeof req.body?.draftHtml === "string" ? req.body.draftHtml : null;
         const editorJson = req.body?.editorJson && typeof req.body.editorJson === "object"
             ? req.body.editorJson
@@ -796,7 +811,9 @@ draftingRouter.patch("/documents/:id", async (req, res, next) => {
             updateData.matchLevel = compact(req.body.matchLevel) || null;
         if (req.body?.draftMarkdown !== undefined) {
             updateData.draftMarkdown =
-                typeof req.body.draftMarkdown === "string" ? req.body.draftMarkdown : null;
+                typeof req.body.draftMarkdown === "string"
+                    ? normalizeDraftPlaceholders(req.body.draftMarkdown)
+                    : null;
         }
         if (req.body?.draftHtml !== undefined) {
             updateData.draftHtml =
@@ -1157,7 +1174,8 @@ draftingRouter.post("/documents/:id/fill-fields", async (req, res, next) => {
                 error: "values is required.",
             });
         }
-        const updatedMarkdown = applyFieldValuesToMarkdown(String(document.draftMarkdown || ""), values);
+        const updatedMarkdown = applyFieldValuesToMarkdown(normalizeDraftPlaceholders(String(document.draftMarkdown || "")), values);
+        const updatedHtml = simpleMarkdownToHtml(updatedMarkdown);
         const unresolvedPlaceholders = extractUnresolvedPlaceholders(updatedMarkdown);
         const latestVersion = await prisma.draftDocumentVersion.findFirst({
             where: { draftDocumentId: document.id },
@@ -1171,6 +1189,7 @@ draftingRouter.post("/documents/:id/fill-fields", async (req, res, next) => {
                 where: { id: document.id },
                 data: {
                     draftMarkdown: updatedMarkdown,
+                    draftHtml: updatedHtml,
                     editorJson: toNullableJsonInput(null),
                     unresolvedPlaceholdersJson: toNullableJsonInput(unresolvedPlaceholders),
                     inputDataJson: toNullableJsonInput({

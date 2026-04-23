@@ -70,6 +70,8 @@ export const ModelName = {
     User: 'User',
     Session: 'Session',
     Conversation: 'Conversation',
+    AssistantMessageFeedback: 'AssistantMessageFeedback',
+    SuggestedCaseFeedback: 'SuggestedCaseFeedback',
     Message: 'Message',
     BookmarkedCase: 'BookmarkedCase',
     PromptRun: 'PromptRun',
@@ -101,7 +103,8 @@ export const UserScalarFieldEnum = {
     subscriptionStatus: 'subscriptionStatus',
     allowedCourtIdsJson: 'allowedCourtIdsJson',
     createdAt: 'createdAt',
-    updatedAt: 'updatedAt'
+    updatedAt: 'updatedAt',
+    creditsRemaining: 'creditsRemaining'
 };
 export const SessionScalarFieldEnum = {
     id: 'id',
@@ -123,6 +126,32 @@ export const ConversationScalarFieldEnum = {
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
     archivedAt: 'archivedAt'
+};
+export const AssistantMessageFeedbackScalarFieldEnum = {
+    id: 'id',
+    userId: 'userId',
+    conversationId: 'conversationId',
+    mode: 'mode',
+    caseId: 'caseId',
+    userMessageId: 'userMessageId',
+    assistantMessageId: 'assistantMessageId',
+    reaction: 'reaction',
+    comment: 'comment',
+    fingerprint: 'fingerprint',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+};
+export const SuggestedCaseFeedbackScalarFieldEnum = {
+    id: 'id',
+    userId: 'userId',
+    caseId: 'caseId',
+    fingerprint: 'fingerprint',
+    feedback: 'feedback',
+    comment: 'comment',
+    userMessageId: 'userMessageId',
+    assistantMessageId: 'assistantMessageId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
 };
 export const MessageScalarFieldEnum = {
     id: 'id',
@@ -332,6 +361,27 @@ export const ConversationOrderByRelevanceFieldEnum = {
     userId: 'userId',
     title: 'title',
     shareToken: 'shareToken'
+};
+export const AssistantMessageFeedbackOrderByRelevanceFieldEnum = {
+    id: 'id',
+    userId: 'userId',
+    conversationId: 'conversationId',
+    mode: 'mode',
+    caseId: 'caseId',
+    userMessageId: 'userMessageId',
+    assistantMessageId: 'assistantMessageId',
+    comment: 'comment',
+    fingerprint: 'fingerprint'
+};
+export const SuggestedCaseFeedbackOrderByRelevanceFieldEnum = {
+    id: 'id',
+    userId: 'userId',
+    caseId: 'caseId',
+    fingerprint: 'fingerprint',
+    feedback: 'feedback',
+    comment: 'comment',
+    userMessageId: 'userMessageId',
+    assistantMessageId: 'assistantMessageId'
 };
 export const MessageOrderByRelevanceFieldEnum = {
     id: 'id',

@@ -11,6 +11,10 @@ export const MessageRole = {
     USER: 'USER',
     ASSISTANT: 'ASSISTANT'
 };
+export const FeedbackReaction = {
+    UP: 'UP',
+    DOWN: 'DOWN'
+};
 export const ChatMode = {
     JUDGMENT: 'JUDGMENT',
     DRAFTING_STUDIO: 'DRAFTING_STUDIO',

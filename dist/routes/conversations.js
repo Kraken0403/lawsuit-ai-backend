@@ -238,4 +238,37 @@ conversationsRouter.patch("/:id", async (req, res, next) => {
         next(error);
     }
 });
+conversationsRouter.delete("/:id", async (req, res, next) => {
+    try {
+        const existing = await prisma.conversation.findFirst({
+            where: {
+                id: req.params.id,
+                userId: req.auth.userId,
+                archivedAt: null,
+            },
+            select: {
+                id: true,
+            },
+        });
+        if (!existing) {
+            return res.status(404).json({
+                ok: false,
+                error: "Conversation not found.",
+            });
+        }
+        await prisma.conversation.update({
+            where: { id: existing.id },
+            data: {
+                archivedAt: new Date(),
+            },
+        });
+        res.status(200).json({
+            ok: true,
+            conversationId: existing.id,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 //# sourceMappingURL=conversations.js.map

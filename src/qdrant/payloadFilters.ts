@@ -1,5 +1,6 @@
 import type { ClassifiedQuery } from "../types/search.js";
 import { canonicalizeCourt, getCourtIdsForFilter } from "../utils/courtResolver.js";
+import { normalizeCourtIdList } from "../utils/allowedCourts.js";
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -25,9 +26,23 @@ export function getRequestedCourtCodes(classified: ClassifiedQuery): string[] {
 }
 
 export function getRequestedCourtIds(classified: ClassifiedQuery): number[] {
-  return unique(
-    (classified.filters?.courts || []).flatMap((court) => getCourtIdsForFilter(court))
+  const explicitCourtIds = unique(
+    (classified.filters?.courts || []).flatMap((court) =>
+      getCourtIdsForFilter(court)
+    )
   );
+
+  const scopedCourtIds = normalizeCourtIdList(classified.filters?.courtIds);
+
+  if (explicitCourtIds.length && scopedCourtIds.length) {
+    const scoped = new Set(scopedCourtIds);
+    const intersection = explicitCourtIds.filter((id) => scoped.has(id));
+    return intersection.length ? intersection : [-1];
+  }
+
+  if (explicitCourtIds.length) return explicitCourtIds;
+  if (scopedCourtIds.length) return scopedCourtIds;
+  return [];
 }
 
 function buildImplicitDecisionYearRange(

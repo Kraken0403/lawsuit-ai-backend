@@ -2,7 +2,7 @@ import { loadDraftAttachments } from "./loadAttachments.js";
 import { routeDraftingQuery } from "./router.js";
 import { buildClarifyingResponse } from "./questionnaire.js";
 import { generateDraftFromPlan } from "./generateDraft.js";
-export async function orchestrateDrafting({ userId, query, messages = [], attachmentIds = [], }) {
+export async function orchestrateDrafting({ userId, query, messages = [], attachmentIds = [], currentDocumentContext = null, }) {
     const cleanAttachmentIds = Array.isArray(attachmentIds)
         ? attachmentIds.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
@@ -31,6 +31,20 @@ export async function orchestrateDrafting({ userId, query, messages = [], attach
             parsedJson: item.parsedJson,
         })),
     });
+    // Log plan summary for debugging title/template selection
+    try {
+        console.log("[drafting] plan.summary", {
+            resolvedQuery: plan.resolvedQuery,
+            detectedFamily: plan.detectedFamily,
+            strategy: plan.strategy,
+            matchLevel: plan.matchLevel,
+            templateCandidates: plan.templateCandidates?.map((t) => ({ id: t.id, title: t.title, source: t.source, score: t.score })) || [],
+            extractedFactsKeys: Object.keys(plan.extractedFacts || {}),
+        });
+    }
+    catch (err) {
+        console.error("[drafting] failed to log plan:", err?.message || err);
+    }
     const sources = plan.templateCandidates.slice(0, 3).map((item) => ({
         title: item.title,
         citation: `${item.family}${item.subtype ? ` / ${item.subtype}` : ""}`,
@@ -54,7 +68,15 @@ export async function orchestrateDrafting({ userId, query, messages = [], attach
         query,
         plan,
         messages,
+        currentDocumentContext,
     });
+    // Log draft summary excerpt
+    try {
+        console.log("[drafting] generated summary (excerpt):", String(summary || "").slice(0, 800));
+    }
+    catch (err) {
+        console.error("[drafting] failed to log summary:", err?.message || err);
+    }
     return {
         mode: "drafting_studio",
         answerType: "drafting_draft",

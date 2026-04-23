@@ -621,16 +621,23 @@ export async function runHybridSearch(classified, limit) {
     if (payloadFilter) {
         queryRequest.filter = payloadFilter;
     }
-    const results = await qdrant.query(env.qdrant.collection, queryRequest);
-    const points = Array.isArray(results.points)
-        ? results.points
-        : results;
-    return points
+    let pointsRaw = [];
+    try {
+        const results = await qdrant.query(env.qdrant.collection, queryRequest);
+        pointsRaw = Array.isArray(results.points) ? results.points : results;
+    }
+    catch (err) {
+        console.error("qdrant.query failed in runHybridSearch:", err?.message || err);
+        // On qdrant failure, return empty result set instead of throwing.
+        return [];
+    }
+    const points = pointsRaw
         .map(toChunkHit)
         .map((hit) => ({
         ...hit,
         score: postScoreHit(hit, classified),
     }))
         .sort((a, b) => b.score - a.score);
+    return points;
 }
 //# sourceMappingURL=hybridSearch.js.map

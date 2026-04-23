@@ -9,6 +9,7 @@ import { fetchAllChunksForCase, fetchPreviewChunksForCase, } from "../qdrant/cas
 import { routeLegalQuery } from "../router/legalRouter.js";
 import { routerToClassifiedQuery } from "../router/routerToClassifiedQuery.js";
 import { matchesCourtConstraint, matchesJurisdictionConstraint, normalizeLatestJurisdictions, getLatestForumBoost, } from "../utils/courtResolver.js";
+import { getRequestedCourtIds } from "../qdrant/payloadFilters.js";
 const citationAliasClient = process.env.OPENAI_API_KEY
     ? new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
@@ -28,6 +29,31 @@ function normalizeLoose(text) {
 }
 function normalizeLooseSimple(text) {
     return (text || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function uniqueNumbers(values = []) {
+    return [...new Set(values.filter((value) => Number.isFinite(value)))];
+}
+function applyCourtScopeToClassified(params) {
+    const { classified } = params;
+    const allowedCourtIds = uniqueNumbers(params.allowedCourtIds || []);
+    const selectedCourtIds = uniqueNumbers(params.selectedCourtIds || []);
+    if (!allowedCourtIds.length) {
+        return classified;
+    }
+    const scopedCourtIds = selectedCourtIds.length
+        ? selectedCourtIds.filter((id) => allowedCourtIds.includes(id))
+        : allowedCourtIds;
+    const queryCourtIds = getRequestedCourtIds(classified);
+    const finalCourtIds = queryCourtIds.length
+        ? queryCourtIds.filter((id) => scopedCourtIds.includes(id))
+        : scopedCourtIds;
+    return {
+        ...classified,
+        filters: {
+            ...(classified.filters || {}),
+            courtIds: finalCourtIds.length ? finalCourtIds : [-1],
+        },
+    };
 }
 function citationTokenFingerprint(text) {
     return normalizeLoose(text)
@@ -645,14 +671,19 @@ function shouldUseLegacyClassifier(classified) {
         classified.confidence < 0.45);
 }
 async function buildClassifiedQuery(params) {
-    const { rawQuery, messages, state, trace } = params;
+    const { rawQuery, messages, state, trace, allowedCourtIds, selectedCourtIds, } = params;
     const cleanedFastPathQuery = stripMetadataInstruction(rawQuery);
     if (looksLikePureCitationQuery(cleanedFastPathQuery)) {
         const fast = buildFastCitationClassifiedQuery(rawQuery);
-        trace.effectiveQuery = fast.normalizedQuery;
-        trace.filtersApplied = fast.filters;
+        const scoped = applyCourtScopeToClassified({
+            classified: fast,
+            allowedCourtIds,
+            selectedCourtIds,
+        });
+        trace.effectiveQuery = scoped.normalizedQuery;
+        trace.filtersApplied = scoped.filters;
         trace.notes.push("used fast-path citation classifier");
-        return fast;
+        return scoped;
     }
     try {
         const router = await routeLegalQuery({
@@ -662,7 +693,6 @@ async function buildClassifiedQuery(params) {
         });
         trace.router = router;
         trace.effectiveQuery = compact(router.resolvedQuery || rawQuery);
-        trace.filtersApplied = router.retrievalPlan.filters;
         const routedClassified = routerToClassifiedQuery({
             originalQuery: rawQuery,
             router,
@@ -686,8 +716,14 @@ async function buildClassifiedQuery(params) {
                     ...rewriteTargets,
                 ]),
             };
+            const scoped = applyCourtScopeToClassified({
+                classified: enrichedClassified,
+                allowedCourtIds,
+                selectedCourtIds,
+            });
+            trace.filtersApplied = scoped.filters;
             trace.notes.push("used structured LLM router");
-            return enrichedClassified;
+            return scoped;
         }
         trace.notes.push("router output was weak; falling back to legacy classifier");
     }
@@ -697,13 +733,18 @@ async function buildClassifiedQuery(params) {
     }
     const legacyEffectiveQuery = maybeRewriteFollowUpQuery(rawQuery, messages);
     const fallback = classifyQuery(legacyEffectiveQuery);
-    trace.classifiedFallback = fallback;
+    const scopedFallback = applyCourtScopeToClassified({
+        classified: fallback,
+        allowedCourtIds,
+        selectedCourtIds,
+    });
+    trace.classifiedFallback = scopedFallback;
     trace.effectiveQuery = legacyEffectiveQuery;
-    trace.filtersApplied = fallback.filters;
+    trace.filtersApplied = scopedFallback.filters;
     if (legacyEffectiveQuery !== rawQuery) {
         trace.notes.push("legacy follow-up rewrite used during classifier fallback");
     }
-    return fallback;
+    return scopedFallback;
 }
 function extractSubjectKeywords(classified) {
     const out = new Set();
@@ -1190,6 +1231,12 @@ async function resolveMetadataLookupByTargetFallback(classified, trace) {
 export async function orchestrateSearch(input) {
     const rawQuery = compact(input?.query || "");
     const messages = normalizeMessages(input?.messages || []);
+    const allowedCourtIds = Array.isArray(input?.allowedCourtIds)
+        ? input.allowedCourtIds
+        : [];
+    const selectedCourtIds = Array.isArray(input?.selectedCourtIds)
+        ? input.selectedCourtIds
+        : [];
     const state = buildConversationState(messages);
     const resolvedReference = resolveReferenceFromMessages(rawQuery, messages);
     const trace = {
@@ -1206,6 +1253,8 @@ export async function orchestrateSearch(input) {
         messages,
         state,
         trace,
+        allowedCourtIds,
+        selectedCourtIds,
     });
     if (classified.intent === "comparison") {
         const resolvedComparison = await resolveComparisonTargetsFirst(classified, trace);

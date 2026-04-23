@@ -22,6 +22,58 @@ function buildFactsBlock(plan) {
         .map(([key, value]) => `- ${key}: ${compact(value)}`)
         .join("\n");
 }
+function stripHtmlToPlainText(value) {
+    return String(value || "")
+        .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+        .replace(/<\/(p|div|li|h1|h2|h3|h4|h5|h6|tr)>/gi, "\n")
+        .replace(/<li[^>]*>/gi, "- ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/\r/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
+}
+function normalizeCurrentDraftText(value) {
+    const source = String(value || "").trim();
+    if (!source)
+        return "";
+    if (/<\/?[a-z][\s\S]*>/i.test(source)) {
+        return stripHtmlToPlainText(source);
+    }
+    return stripOuterMarkdownFence(source);
+}
+function buildFilledValuesBlock(values) {
+    if (!values || typeof values !== "object")
+        return "";
+    const entries = Object.entries(values)
+        .map(([key, value]) => [String(key || "").trim(), compact(value)])
+        .filter(([key, value]) => key && value);
+    if (!entries.length)
+        return "";
+    return entries.map(([key, value]) => `- ${key}: ${value}`).join("\n");
+}
+function stripOuterMarkdownFence(value) {
+    let text = String(value || "")
+        .replace(/\r\n/g, "\n")
+        .trim();
+    if (!text)
+        return "";
+    const fencedBlockMatch = text.match(/^```(?:markdown|md|mdown|text|txt)?\s*\n?([\s\S]*?)\n?```$/i);
+    if (fencedBlockMatch?.[1]) {
+        text = fencedBlockMatch[1].trim();
+    }
+    else {
+        text = text
+            .replace(/^```(?:markdown|md|mdown|text|txt)?\s*\n?/i, "")
+            .replace(/\n?```$/, "")
+            .trim();
+    }
+    return text.replace(/^markdown\s*\n+/i, "").trim();
+}
 function buildFallbackDraft(plan, query) {
     const top = plan.templateCandidates[0];
     if (top) {
@@ -71,7 +123,7 @@ function buildFallbackDraft(plan, query) {
     ].join("\n");
 }
 export async function generateDraftFromPlan(params) {
-    const { query, plan, messages = [] } = params;
+    const { query, plan, messages = [], currentDocumentContext = null } = params;
     const top = plan.templateCandidates[0];
     const secondary = plan.templateCandidates[1];
     const materialized = top ? materializeTemplateCandidate(top, plan.resolvedQuery || query) : null;
@@ -80,6 +132,9 @@ export async function generateDraftFromPlan(params) {
     }
     const priorContext = buildConversationContext(messages);
     const factsBlock = buildFactsBlock(plan);
+    const currentDraftText = normalizeCurrentDraftText(currentDocumentContext?.draftText || "");
+    const currentDraftTitle = compact(currentDocumentContext?.title || "");
+    const filledValuesBlock = buildFilledValuesBlock(currentDocumentContext?.filledValues || null);
     const strictTemplateMode = !!top &&
         (plan.strategy === "user_format_override" ||
             plan.shouldUseUserAttachmentFirst ||
@@ -100,6 +155,14 @@ export async function generateDraftFromPlan(params) {
                     "If any information is missing, keep explicit placeholders such as [ADD CLIENT ADDRESS] or preserve unresolved placeholders from the provided scaffold.",
                     `The document family is locked to: ${plan.detectedFamily || "misc"}.`,
                     "Do not switch to a different document family unless the user explicitly instructed that change.",
+                    currentDraftText
+                        ? [
+                            "A CURRENT DRAFT is provided below.",
+                            "Treat it as the primary working document for follow-up edits, insertions, expansions, and refinements.",
+                            "Do not restart from scratch when the user asks for a follow-up like add, edit, improve, revise, expand, or change.",
+                            "Preserve already-filled names, dates, amounts, addresses, and other specifics from the current draft unless the user explicitly asks to change them.",
+                        ].join(" ")
+                        : "",
                     strictTemplateMode
                         ? [
                             "The PRIMARY TEMPLATE SCAFFOLD is controlling.",
@@ -132,6 +195,9 @@ export async function generateDraftFromPlan(params) {
                     "",
                     factsBlock ? `STRUCTURED FACTS:\n${factsBlock}` : "",
                     priorContext ? `PRIOR CHAT CONTEXT:\n${priorContext}` : "",
+                    currentDraftTitle ? `CURRENT DRAFT TITLE:\n${currentDraftTitle}` : "",
+                    currentDraftText ? `CURRENT DRAFT BODY (REVISE THIS IN PLACE):\n${currentDraftText.slice(0, 18000)}` : "",
+                    filledValuesBlock ? `ALREADY FILLED PLACEHOLDER VALUES (PRESERVE UNLESS USER CHANGES THEM):\n${filledValuesBlock}` : "",
                     materialized
                         ? `PRIMARY TEMPLATE SCAFFOLD (START FROM THIS):\n${materialized.scaffoldMarkdown.slice(0, 18000)}`
                         : "",
@@ -152,9 +218,7 @@ export async function generateDraftFromPlan(params) {
             },
         ],
     });
-    const text = String(response.output_text || "")
-        .replace(/\r\n/g, "\n")
-        .trim();
+    const text = stripOuterMarkdownFence(String(response.output_text || ""));
     return text || buildFallbackDraft(plan, query);
 }
 //# sourceMappingURL=generateDraft.js.map

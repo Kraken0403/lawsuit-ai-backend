@@ -59,25 +59,32 @@ async function fetchCaseChunks(caseId, opts = {}) {
     let offset = undefined;
     const seenOffsets = new Set();
     while (allPoints.length < maxChunks) {
-        const response = await qdrant.scroll(env.qdrant.collection, {
-            filter: {
-                must: [
-                    {
-                        key: "caseId",
-                        match: { value: caseId },
-                    },
-                ],
-            },
-            limit: Math.min(pageSize, maxChunks - allPoints.length),
-            with_payload: true,
-            with_vector: false,
-            offset,
-        });
-        const points = response.points || [];
-        if (!points.length)
+        let response;
+        try {
+            response = await qdrant.scroll(env.qdrant.collection, {
+                filter: {
+                    must: [
+                        {
+                            key: "caseId",
+                            match: { value: caseId },
+                        },
+                    ],
+                },
+                limit: Math.min(pageSize, maxChunks - allPoints.length),
+                with_payload: true,
+                with_vector: false,
+                offset,
+            });
+            const points = response.points || [];
+            if (!points.length)
+                break;
+            allPoints.push(...points);
+        }
+        catch (err) {
+            console.error("qdrant.scroll failed in fetchCaseChunks:", err?.message || err);
             break;
-        allPoints.push(...points);
-        if (!response.next_page_offset)
+        }
+        if (!response?.next_page_offset)
             break;
         const nextOffset = String(response.next_page_offset);
         if (seenOffsets.has(nextOffset))

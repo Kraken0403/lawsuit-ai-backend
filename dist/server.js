@@ -8,6 +8,7 @@ import { conversationsRouter } from "./routes/conversations.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { casesRouter } from "./routes/cases.js";
 import { draftingRouter } from "./routes/drafting.js";
+import { feedbackRouter } from "./routes/feedback.js";
 import { getUploadsRoot } from "./lib/settingsAssetStorage.js";
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
@@ -45,6 +46,7 @@ app.use("/api/bookmarks", bookmarksRouter);
 app.use("/api/chat", chatStreamRouter);
 app.use("/api/cases", casesRouter);
 app.use("/api/drafting", draftingRouter);
+app.use("/api/feedback", feedbackRouter);
 app.use((_req, res) => {
     res.status(404).json({
         ok: false,
