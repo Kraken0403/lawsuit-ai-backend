@@ -7,38 +7,5 @@
 *
 * 🟢 You can import this file directly.
 */
-export const MessageRole = {
-    USER: 'USER',
-    ASSISTANT: 'ASSISTANT'
-};
-export const FeedbackReaction = {
-    UP: 'UP',
-    DOWN: 'DOWN'
-};
-export const ChatMode = {
-    JUDGMENT: 'JUDGMENT',
-    DRAFTING_STUDIO: 'DRAFTING_STUDIO',
-    ARGUMENT: 'ARGUMENT'
-};
-export const DraftTemplateSource = {
-    SYSTEM: 'SYSTEM',
-    FIRM: 'FIRM',
-    SESSION_UPLOAD: 'SESSION_UPLOAD'
-};
-export const DraftTemplateStrength = {
-    STRONG: 'STRONG',
-    STANDARD: 'STANDARD',
-    BASIC: 'BASIC',
-    LEGACY: 'LEGACY'
-};
-export const DraftDocumentStatus = {
-    DRAFT: 'DRAFT',
-    FINAL: 'FINAL',
-    ARCHIVED: 'ARCHIVED'
-};
-export const DraftBrandingMode = {
-    NONE: 'NONE',
-    HEADER_FOOTER: 'HEADER_FOOTER',
-    LETTERHEAD: 'LETTERHEAD'
-};
+export {};
 //# sourceMappingURL=enums.js.map

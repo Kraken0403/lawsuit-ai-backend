@@ -26,7 +26,8 @@ import {
   getDraftingSettingsFieldForKind,
   type DraftingAssetKind,
 } from "../lib/settingsAssetStorage.js";
-import { toNullableJsonInput } from "../lib/prismaJson.js";
+import { parseJsonField, toNullableJsonInput } from "../lib/prismaJson.js";
+
 
 import { generateDraftPdfBuffer } from "../drafting/pdfExport.js";
 
@@ -517,9 +518,9 @@ draftingRouter.post("/templates", async (req: AuthenticatedRequest, res, next) =
         jurisdiction: compact(req.body?.jurisdiction) || null,
         forum: compact(req.body?.forum) || null,
         language: compact(req.body?.language) || null,
-        tagsJson: toStringArray(req.body?.tags),
-        useWhenJson: toStringArray(req.body?.useWhen),
-        notForJson: toStringArray(req.body?.notFor),
+        tagsJson: toNullableJsonInput(toStringArray(req.body?.tags)),
+        useWhenJson: toNullableJsonInput(toStringArray(req.body?.useWhen)),
+        notForJson: toNullableJsonInput(toStringArray(req.body?.notFor)),
         summary: compact(req.body?.summary) || null,
         precedentStrength:
           req.body?.precedentStrength === "STRONG" ||
@@ -529,18 +530,19 @@ draftingRouter.post("/templates", async (req: AuthenticatedRequest, res, next) =
             : "STANDARD",
         rawText,
         normalizedText: normalizeText(rawText),
-        placeholdersJson: Array.isArray(req.body?.placeholders)
-          ? req.body.placeholders
-          : [],
-        clauseBlocksJson: Array.isArray(req.body?.clauseBlocks)
-          ? req.body.clauseBlocks
-          : [],
-        executionRequirementsJson:
+        placeholdersJson: toNullableJsonInput(
+          Array.isArray(req.body?.placeholders) ? req.body.placeholders : []
+        ),
+        clauseBlocksJson: toNullableJsonInput(
+          Array.isArray(req.body?.clauseBlocks) ? req.body.clauseBlocks : []
+        ),
+        executionRequirementsJson: toNullableJsonInput(
           req.body?.executionRequirements &&
-          typeof req.body.executionRequirements === "object"
+            typeof req.body.executionRequirements === "object"
             ? req.body.executionRequirements
-            : null,
-        riskNotesJson: toStringArray(req.body?.riskNotes),
+            : null
+        ),
+        riskNotesJson: toNullableJsonInput(toStringArray(req.body?.riskNotes)),
         sourceRef: compact(req.body?.sourceRef) || null,
       },
     });
@@ -786,12 +788,13 @@ draftingRouter.post("/uploads", async (req: AuthenticatedRequest, res, next) => 
         mimeType,
         storageUrl: `inline://drafting/${Date.now()}/${encodeURIComponent(fileName)}`,
         extractedText: text,
-        parsedJson:
+        parsedJson: toNullableJsonInput(
           req.body?.parsedJson &&
-          typeof req.body.parsedJson === "object" &&
-          !Array.isArray(req.body.parsedJson)
+            typeof req.body.parsedJson === "object" &&
+            !Array.isArray(req.body.parsedJson)
             ? req.body.parsedJson
-            : null,
+            : null
+        ),
       },
     });
 
@@ -890,12 +893,10 @@ draftingRouter.post("/uploads/:id/save-as-template", async (req: AuthenticatedRe
       });
     }
 
-    const parsed =
-      attachment.parsedJson &&
-      typeof attachment.parsedJson === "object" &&
-      !Array.isArray(attachment.parsedJson)
-        ? (attachment.parsedJson as Record<string, unknown>)
-        : {};
+    const parsed = parseJsonField<Record<string, unknown>>(
+      attachment.parsedJson,
+      {}
+    );
 
     const title =
       compact(req.body?.title) ||
@@ -929,13 +930,13 @@ draftingRouter.post("/uploads/:id/save-as-template", async (req: AuthenticatedRe
           summary,
           rawText: attachment.extractedText!,
           normalizedText: normalizeText(attachment.extractedText),
-          tagsJson: tags,
-          useWhenJson: [],
-          notForJson: [],
-          placeholdersJson: [],
-          clauseBlocksJson: [],
+          tagsJson: toNullableJsonInput(tags),
+          useWhenJson: toNullableJsonInput([]),
+          notForJson: toNullableJsonInput([]),
+          placeholdersJson: toNullableJsonInput([]),
+          clauseBlocksJson: toNullableJsonInput([]),
           executionRequirementsJson: toNullableJsonInput(null),
-          riskNotesJson: [],
+          riskNotesJson: toNullableJsonInput([]),
           sourceRef: attachment.fileName,
           isActive: true,
         },
@@ -1002,10 +1003,11 @@ draftingRouter.patch("/documents/:id", async (req: AuthenticatedRequest, res, ne
     }
 
     if (req.body?.editorJson !== undefined) {
-      updateData.editorJson =
+      updateData.editorJson = toNullableJsonInput(
         req.body.editorJson && typeof req.body.editorJson === "object"
           ? req.body.editorJson
-          : null;
+          : null
+      );
     }
 
     if (req.body?.status !== undefined) {
@@ -1016,37 +1018,44 @@ draftingRouter.patch("/documents/:id", async (req: AuthenticatedRequest, res, ne
     }
 
     if (req.body?.sourceTemplateIds !== undefined) {
-      updateData.sourceTemplateIdsJson = Array.isArray(req.body.sourceTemplateIds)
-        ? req.body.sourceTemplateIds
-        : [];
+      updateData.sourceTemplateIdsJson = toNullableJsonInput(
+        Array.isArray(req.body.sourceTemplateIds)
+          ? req.body.sourceTemplateIds
+          : []
+      );
     }
 
     if (req.body?.inputData !== undefined) {
-      updateData.inputDataJson =
+      updateData.inputDataJson = toNullableJsonInput(
         req.body.inputData && typeof req.body.inputData === "object"
           ? req.body.inputData
-          : null;
+          : null
+      );
     }
 
     if (req.body?.draftingPlan !== undefined) {
-      updateData.draftingPlanJson =
+      updateData.draftingPlanJson = toNullableJsonInput(
         req.body.draftingPlan && typeof req.body.draftingPlan === "object"
           ? req.body.draftingPlan
-          : null;
+          : null
+      );
     }
 
     if (req.body?.unresolvedPlaceholders !== undefined) {
-      updateData.unresolvedPlaceholdersJson = Array.isArray(req.body.unresolvedPlaceholders)
-        ? req.body.unresolvedPlaceholders
-        : [];
+      updateData.unresolvedPlaceholdersJson = toNullableJsonInput(
+        Array.isArray(req.body.unresolvedPlaceholders)
+          ? req.body.unresolvedPlaceholders
+          : []
+      );
     } else {
       const markdownForPlaceholderScan =
         typeof updateData.draftMarkdown === "string"
           ? updateData.draftMarkdown
           : existing.draftMarkdown || "";
 
-      updateData.unresolvedPlaceholdersJson =
-        extractUnresolvedPlaceholders(String(markdownForPlaceholderScan || ""));
+           updateData.unresolvedPlaceholdersJson = toNullableJsonInput(
+            extractUnresolvedPlaceholders(String(markdownForPlaceholderScan || ""))
+        );
     }
 
     const updated = await prisma.draftDocument.update({
@@ -1343,9 +1352,9 @@ draftingRouter.post("/documents/:id/versions", async (req: AuthenticatedRequest,
           subtype: nextSubtype,
           strategy: nextStrategy,
           matchLevel: nextMatchLevel,
-          sourceTemplateIdsJson: nextSourceTemplateIds,
-          inputDataJson: nextInputData,
-          draftingPlanJson: nextDraftingPlan,
+          sourceTemplateIdsJson: toNullableJsonInput(nextSourceTemplateIds),
+          inputDataJson: toNullableJsonInput(nextInputData),
+          draftingPlanJson: toNullableJsonInput(nextDraftingPlan),
           draftMarkdown: nextDraftMarkdown,
           draftHtml: nextDraftHtml,
           createdByUserId: req.auth!.userId,
@@ -1438,9 +1447,10 @@ draftingRouter.post("/documents/:id/fill-fields", async (req: AuthenticatedReque
           editorJson: toNullableJsonInput(null),
           unresolvedPlaceholdersJson: toNullableJsonInput(unresolvedPlaceholders),
           inputDataJson: toNullableJsonInput({
-            ...(document.inputDataJson && typeof document.inputDataJson === "object"
-              ? document.inputDataJson
-              : {}),
+            ...parseJsonField<Record<string, unknown>>(
+              document.inputDataJson,
+              {}
+            ),
             filledValues: values,
           }),
         },

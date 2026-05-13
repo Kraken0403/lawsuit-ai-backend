@@ -89,7 +89,8 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
     ReadUncommitted: 'ReadUncommitted',
     ReadCommitted: 'ReadCommitted',
     RepeatableRead: 'RepeatableRead',
-    Serializable: 'Serializable'
+    Serializable: 'Serializable',
+    Snapshot: 'Snapshot'
 });
 export const UserScalarFieldEnum = {
     id: 'id',
@@ -319,177 +320,9 @@ export const SortOrder = {
     asc: 'asc',
     desc: 'desc'
 };
-export const NullableJsonNullValueInput = {
-    DbNull: DbNull,
-    JsonNull: JsonNull
-};
-export const JsonNullValueInput = {
-    JsonNull: JsonNull
-};
-export const JsonNullValueFilter = {
-    DbNull: DbNull,
-    JsonNull: JsonNull,
-    AnyNull: AnyNull
-};
-export const QueryMode = {
-    default: 'default',
-    insensitive: 'insensitive'
-};
 export const NullsOrder = {
     first: 'first',
     last: 'last'
-};
-export const UserOrderByRelevanceFieldEnum = {
-    id: 'id',
-    externalUserId: 'externalUserId',
-    authProvider: 'authProvider',
-    username: 'username',
-    email: 'email',
-    name: 'name',
-    passwordHash: 'passwordHash',
-    subscriptionStatus: 'subscriptionStatus'
-};
-export const SessionOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    tokenHash: 'tokenHash',
-    userAgent: 'userAgent',
-    ipAddress: 'ipAddress'
-};
-export const ConversationOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    title: 'title',
-    shareToken: 'shareToken'
-};
-export const AssistantMessageFeedbackOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    conversationId: 'conversationId',
-    mode: 'mode',
-    caseId: 'caseId',
-    userMessageId: 'userMessageId',
-    assistantMessageId: 'assistantMessageId',
-    comment: 'comment',
-    fingerprint: 'fingerprint'
-};
-export const SuggestedCaseFeedbackOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    caseId: 'caseId',
-    fingerprint: 'fingerprint',
-    feedback: 'feedback',
-    comment: 'comment',
-    userMessageId: 'userMessageId',
-    assistantMessageId: 'assistantMessageId'
-};
-export const MessageOrderByRelevanceFieldEnum = {
-    id: 'id',
-    conversationId: 'conversationId',
-    content: 'content'
-};
-export const BookmarkedCaseOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    fingerprint: 'fingerprint',
-    externalCaseId: 'externalCaseId',
-    title: 'title',
-    citation: 'citation'
-};
-export const PromptRunOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    conversationId: 'conversationId',
-    userMessageId: 'userMessageId',
-    assistantMessageId: 'assistantMessageId',
-    originalQuery: 'originalQuery',
-    effectiveQuery: 'effectiveQuery',
-    mode: 'mode'
-};
-export const CaseSummaryOrderByRelevanceFieldEnum = {
-    id: 'id',
-    caseId: 'caseId',
-    fileName: 'fileName',
-    title: 'title',
-    citation: 'citation',
-    summaryType: 'summaryType',
-    sourceType: 'sourceType',
-    sourceHash: 'sourceHash',
-    modelName: 'modelName',
-    status: 'status',
-    renderedMarkdown: 'renderedMarkdown'
-};
-export const FirmSettingsOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    firmName: 'firmName',
-    advocateName: 'advocateName',
-    enrollmentNumber: 'enrollmentNumber',
-    address: 'address',
-    email: 'email',
-    phone: 'phone',
-    website: 'website',
-    logoUrl: 'logoUrl',
-    headerText: 'headerText',
-    footerText: 'footerText',
-    signatureText: 'signatureText',
-    draftingHeaderImageUrl: 'draftingHeaderImageUrl',
-    draftingFooterImageUrl: 'draftingFooterImageUrl',
-    draftingLetterheadImageUrl: 'draftingLetterheadImageUrl',
-    draftingDefaultTone: 'draftingDefaultTone',
-    draftingDefaultJurisdiction: 'draftingDefaultJurisdiction',
-    draftingDefaultForum: 'draftingDefaultForum',
-    draftingSignatureImageUrl: 'draftingSignatureImageUrl'
-};
-export const DraftTemplateOrderByRelevanceFieldEnum = {
-    id: 'id',
-    ownerUserId: 'ownerUserId',
-    title: 'title',
-    family: 'family',
-    subtype: 'subtype',
-    jurisdiction: 'jurisdiction',
-    forum: 'forum',
-    language: 'language',
-    summary: 'summary',
-    rawText: 'rawText',
-    normalizedText: 'normalizedText',
-    sourceRef: 'sourceRef'
-};
-export const DraftDocumentOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    conversationId: 'conversationId',
-    title: 'title',
-    family: 'family',
-    subtype: 'subtype',
-    strategy: 'strategy',
-    matchLevel: 'matchLevel',
-    draftMarkdown: 'draftMarkdown',
-    draftHtml: 'draftHtml',
-    exportPdfUrl: 'exportPdfUrl',
-    exportDocxUrl: 'exportDocxUrl'
-};
-export const DraftAttachmentOrderByRelevanceFieldEnum = {
-    id: 'id',
-    userId: 'userId',
-    conversationId: 'conversationId',
-    templateId: 'templateId',
-    fileName: 'fileName',
-    mimeType: 'mimeType',
-    storageUrl: 'storageUrl',
-    extractedText: 'extractedText'
-};
-export const DraftDocumentVersionOrderByRelevanceFieldEnum = {
-    id: 'id',
-    draftDocumentId: 'draftDocumentId',
-    title: 'title',
-    family: 'family',
-    subtype: 'subtype',
-    strategy: 'strategy',
-    matchLevel: 'matchLevel',
-    draftMarkdown: 'draftMarkdown',
-    draftHtml: 'draftHtml',
-    createdByUserId: 'createdByUserId'
 };
 export const defineExtension = runtime.Extensions.defineExtension;
 //# sourceMappingURL=prismaNamespace.js.map

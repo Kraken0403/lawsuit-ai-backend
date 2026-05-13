@@ -1,4 +1,5 @@
 import prisma from "../lib/prisma.js";
+import { parseJsonArray } from "../lib/prismaJson.js";
 import type { DraftTemplateCandidate, DocumentFamily } from "./types.js";
 import {
   compact,
@@ -14,6 +15,29 @@ type SearchInput = {
   familyHint?: DocumentFamily | null;
   limit?: number;
 };
+
+function normalizeTemplateSource(value: string): DraftTemplateCandidate["source"] {
+  if (value === "SYSTEM" || value === "FIRM" || value === "SESSION_UPLOAD") {
+    return value;
+  }
+
+  return "SYSTEM";
+}
+
+function normalizeTemplateStrength(
+  value: string
+): DraftTemplateCandidate["precedentStrength"] {
+  if (
+    value === "STRONG" ||
+    value === "STANDARD" ||
+    value === "BASIC" ||
+    value === "LEGACY"
+  ) {
+    return value;
+  }
+
+  return "STANDARD";
+}
 
 function computeTemplateScore(params: {
   query: string;
@@ -38,15 +62,16 @@ function computeTemplateScore(params: {
   const summaryNorm = normalizeText(template.summary);
   const tagNorm = normalizeText(template.tags.join(" "));
   const bodyNorm = normalizeText(template.normalizedText);
+  const familyHintNorm = normalizeText(familyHint);
 
   let score = 0;
 
   if (titleNorm.includes(queryNorm) && queryNorm.length >= 5) score += 0.42;
   if (subtypeNorm && queryNorm.includes(subtypeNorm)) score += 0.16;
-  if (familyHint && familyNorm === familyHint) score += 0.12;
+  if (familyHintNorm && familyNorm === familyHintNorm) score += 0.12;
 
-  score += overlapRatio(queryTokens, tokenize(titleNorm)) * 0.20;
-  score += overlapRatio(queryTokens, tokenize(summaryNorm)) * 0.10;
+  score += overlapRatio(queryTokens, tokenize(titleNorm)) * 0.2;
+  score += overlapRatio(queryTokens, tokenize(summaryNorm)) * 0.1;
   score += overlapRatio(queryTokens, tokenize(tagNorm)) * 0.12;
   score += overlapRatio(queryTokens, tokenize(bodyNorm).slice(0, 300)) * 0.12;
 
@@ -69,10 +94,7 @@ export async function searchDraftTemplates({
       ],
       ...(familyHint ? { family: familyHint } : {}),
     },
-    orderBy: [
-      { source: "asc" },
-      { updatedAt: "desc" },
-    ],
+    orderBy: [{ source: "asc" }, { updatedAt: "desc" }],
     select: {
       id: true,
       source: true,
@@ -95,6 +117,12 @@ export async function searchDraftTemplates({
     .map((template) => {
       const tags = toStringArray(template.tagsJson);
       const riskNotes = toStringArray(template.riskNotesJson);
+      const placeholders = parseJsonArray<Record<string, unknown>>(
+        template.placeholdersJson
+      );
+      const clauseBlocks = parseJsonArray<Record<string, unknown>>(
+        template.clauseBlocksJson
+      );
       const normalized = compact(template.normalizedText) || template.rawText;
 
       const score = computeTemplateScore({
@@ -112,7 +140,7 @@ export async function searchDraftTemplates({
 
       return {
         id: template.id,
-        source: template.source,
+        source: normalizeTemplateSource(template.source),
         title: template.title,
         family: template.family,
         subtype: template.subtype,
@@ -120,13 +148,11 @@ export async function searchDraftTemplates({
         tags,
         rawText: template.rawText,
         normalizedText: normalized,
-        placeholders: Array.isArray(template.placeholdersJson)
-          ? (template.placeholdersJson as Array<Record<string, unknown>>)
-          : [],
-        clauseBlocks: Array.isArray(template.clauseBlocksJson)
-          ? (template.clauseBlocksJson as Array<Record<string, unknown>>)
-          : [],
-        precedentStrength: template.precedentStrength,
+        placeholders,
+        clauseBlocks,
+        precedentStrength: normalizeTemplateStrength(
+          template.precedentStrength
+        ),
         riskNotes,
         sourceRef: template.sourceRef,
         score,

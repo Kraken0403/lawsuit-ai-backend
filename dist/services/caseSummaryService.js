@@ -4,6 +4,8 @@ import prisma from "../lib/prisma.js";
 import { fetchFullCaseFromQdrant } from "./qdrantCaseService.js";
 import { fetchFullCaseHtmlFromSql } from "./sqlCaseService.js";
 import { buildCanonicalCaseTextFromQdrant } from "./canonicalCaseText.js";
+// import { buildCanonicalCaseTextFromQdrant } from "./canonicalCaseText.js";
+import { parseJsonField, toJsonString } from "../lib/prismaJson.js";
 const SUMMARY_TYPE = "detailed_v1";
 const pendingSummaryJobs = new Map();
 const openai = new OpenAI({
@@ -561,7 +563,7 @@ export async function getOrCreateDetailedCaseSummary(caseId, options) {
                     sourceHash: prepared.sourceHash,
                     modelName: model,
                     status: "ready",
-                    sectionsJson: sections,
+                    sectionsJson: toJsonString(sections),
                     renderedMarkdown,
                 },
             });
@@ -616,8 +618,7 @@ export async function streamDetailedCaseSummary(caseId, options, writeEvent) {
                 citation: prepared.fullCase.citation,
                 court: prepared.fullCase.court,
                 dateOfDecision: prepared.fullCase.dateOfDecision,
-            }, existing.sectionsJson ||
-                emptyDetailedSummarySections());
+            }, parseJsonField(existing.sectionsJson, emptyDetailedSummarySections()));
         for (const chunk of splitIntoStreamChunks(renderedMarkdown, 140)) {
             writeEvent({
                 type: "delta",
@@ -679,7 +680,7 @@ export async function streamDetailedCaseSummary(caseId, options, writeEvent) {
                 sourceHash: prepared.sourceHash,
                 modelName: model,
                 status: "ready",
-                sectionsJson: parsedSections,
+                sectionsJson: toJsonString(parsedSections),
                 renderedMarkdown,
             },
         });

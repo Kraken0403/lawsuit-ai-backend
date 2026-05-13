@@ -6,7 +6,7 @@ import { compact, normalizeText, toStringArray, } from "../drafting/utils.js";
 import { applyFieldValuesToMarkdown, extractUnresolvedPlaceholders, normalizeDraftPlaceholders, } from "../drafting/placeholders.js";
 import { regenerateDraftSection } from "../drafting/regenerateSection.js";
 import { buildPublicAssetUrl, createDraftingSettingsAssetUpload, deleteLocalAssetByPublicUrl, getDraftingSettingsFieldForKind, } from "../lib/settingsAssetStorage.js";
-import { toNullableJsonInput } from "../lib/prismaJson.js";
+import { parseJsonField, toNullableJsonInput } from "../lib/prismaJson.js";
 import { generateDraftPdfBuffer } from "../drafting/pdfExport.js";
 import { generateDraftDocxBuffer } from "../drafting/docxExport.js";
 import multer from "multer";
@@ -402,9 +402,9 @@ draftingRouter.post("/templates", async (req, res, next) => {
                 jurisdiction: compact(req.body?.jurisdiction) || null,
                 forum: compact(req.body?.forum) || null,
                 language: compact(req.body?.language) || null,
-                tagsJson: toStringArray(req.body?.tags),
-                useWhenJson: toStringArray(req.body?.useWhen),
-                notForJson: toStringArray(req.body?.notFor),
+                tagsJson: toNullableJsonInput(toStringArray(req.body?.tags)),
+                useWhenJson: toNullableJsonInput(toStringArray(req.body?.useWhen)),
+                notForJson: toNullableJsonInput(toStringArray(req.body?.notFor)),
                 summary: compact(req.body?.summary) || null,
                 precedentStrength: req.body?.precedentStrength === "STRONG" ||
                     req.body?.precedentStrength === "BASIC" ||
@@ -413,17 +413,13 @@ draftingRouter.post("/templates", async (req, res, next) => {
                     : "STANDARD",
                 rawText,
                 normalizedText: normalizeText(rawText),
-                placeholdersJson: Array.isArray(req.body?.placeholders)
-                    ? req.body.placeholders
-                    : [],
-                clauseBlocksJson: Array.isArray(req.body?.clauseBlocks)
-                    ? req.body.clauseBlocks
-                    : [],
-                executionRequirementsJson: req.body?.executionRequirements &&
+                placeholdersJson: toNullableJsonInput(Array.isArray(req.body?.placeholders) ? req.body.placeholders : []),
+                clauseBlocksJson: toNullableJsonInput(Array.isArray(req.body?.clauseBlocks) ? req.body.clauseBlocks : []),
+                executionRequirementsJson: toNullableJsonInput(req.body?.executionRequirements &&
                     typeof req.body.executionRequirements === "object"
                     ? req.body.executionRequirements
-                    : null,
-                riskNotesJson: toStringArray(req.body?.riskNotes),
+                    : null),
+                riskNotesJson: toNullableJsonInput(toStringArray(req.body?.riskNotes)),
                 sourceRef: compact(req.body?.sourceRef) || null,
             },
         });
@@ -630,11 +626,11 @@ draftingRouter.post("/uploads", async (req, res, next) => {
                 mimeType,
                 storageUrl: `inline://drafting/${Date.now()}/${encodeURIComponent(fileName)}`,
                 extractedText: text,
-                parsedJson: req.body?.parsedJson &&
+                parsedJson: toNullableJsonInput(req.body?.parsedJson &&
                     typeof req.body.parsedJson === "object" &&
                     !Array.isArray(req.body.parsedJson)
                     ? req.body.parsedJson
-                    : null,
+                    : null),
             },
         });
         res.status(201).json({
@@ -723,11 +719,7 @@ draftingRouter.post("/uploads/:id/save-as-template", async (req, res, next) => {
                 reused: true,
             });
         }
-        const parsed = attachment.parsedJson &&
-            typeof attachment.parsedJson === "object" &&
-            !Array.isArray(attachment.parsedJson)
-            ? attachment.parsedJson
-            : {};
+        const parsed = parseJsonField(attachment.parsedJson, {});
         const title = compact(req.body?.title) ||
             (typeof parsed.title === "string" ? compact(parsed.title) : "") ||
             attachment.fileName;
@@ -751,13 +743,13 @@ draftingRouter.post("/uploads/:id/save-as-template", async (req, res, next) => {
                     summary,
                     rawText: attachment.extractedText,
                     normalizedText: normalizeText(attachment.extractedText),
-                    tagsJson: tags,
-                    useWhenJson: [],
-                    notForJson: [],
-                    placeholdersJson: [],
-                    clauseBlocksJson: [],
+                    tagsJson: toNullableJsonInput(tags),
+                    useWhenJson: toNullableJsonInput([]),
+                    notForJson: toNullableJsonInput([]),
+                    placeholdersJson: toNullableJsonInput([]),
+                    clauseBlocksJson: toNullableJsonInput([]),
                     executionRequirementsJson: toNullableJsonInput(null),
-                    riskNotesJson: [],
+                    riskNotesJson: toNullableJsonInput([]),
                     sourceRef: attachment.fileName,
                     isActive: true,
                 },
@@ -820,10 +812,9 @@ draftingRouter.patch("/documents/:id", async (req, res, next) => {
                 typeof req.body.draftHtml === "string" ? req.body.draftHtml : null;
         }
         if (req.body?.editorJson !== undefined) {
-            updateData.editorJson =
-                req.body.editorJson && typeof req.body.editorJson === "object"
-                    ? req.body.editorJson
-                    : null;
+            updateData.editorJson = toNullableJsonInput(req.body.editorJson && typeof req.body.editorJson === "object"
+                ? req.body.editorJson
+                : null);
         }
         if (req.body?.status !== undefined) {
             updateData.status =
@@ -832,33 +823,30 @@ draftingRouter.patch("/documents/:id", async (req, res, next) => {
                     : "DRAFT";
         }
         if (req.body?.sourceTemplateIds !== undefined) {
-            updateData.sourceTemplateIdsJson = Array.isArray(req.body.sourceTemplateIds)
+            updateData.sourceTemplateIdsJson = toNullableJsonInput(Array.isArray(req.body.sourceTemplateIds)
                 ? req.body.sourceTemplateIds
-                : [];
+                : []);
         }
         if (req.body?.inputData !== undefined) {
-            updateData.inputDataJson =
-                req.body.inputData && typeof req.body.inputData === "object"
-                    ? req.body.inputData
-                    : null;
+            updateData.inputDataJson = toNullableJsonInput(req.body.inputData && typeof req.body.inputData === "object"
+                ? req.body.inputData
+                : null);
         }
         if (req.body?.draftingPlan !== undefined) {
-            updateData.draftingPlanJson =
-                req.body.draftingPlan && typeof req.body.draftingPlan === "object"
-                    ? req.body.draftingPlan
-                    : null;
+            updateData.draftingPlanJson = toNullableJsonInput(req.body.draftingPlan && typeof req.body.draftingPlan === "object"
+                ? req.body.draftingPlan
+                : null);
         }
         if (req.body?.unresolvedPlaceholders !== undefined) {
-            updateData.unresolvedPlaceholdersJson = Array.isArray(req.body.unresolvedPlaceholders)
+            updateData.unresolvedPlaceholdersJson = toNullableJsonInput(Array.isArray(req.body.unresolvedPlaceholders)
                 ? req.body.unresolvedPlaceholders
-                : [];
+                : []);
         }
         else {
             const markdownForPlaceholderScan = typeof updateData.draftMarkdown === "string"
                 ? updateData.draftMarkdown
                 : existing.draftMarkdown || "";
-            updateData.unresolvedPlaceholdersJson =
-                extractUnresolvedPlaceholders(String(markdownForPlaceholderScan || ""));
+            updateData.unresolvedPlaceholdersJson = toNullableJsonInput(extractUnresolvedPlaceholders(String(markdownForPlaceholderScan || "")));
         }
         const updated = await prisma.draftDocument.update({
             where: { id: existing.id },
@@ -1114,9 +1102,9 @@ draftingRouter.post("/documents/:id/versions", async (req, res, next) => {
                     subtype: nextSubtype,
                     strategy: nextStrategy,
                     matchLevel: nextMatchLevel,
-                    sourceTemplateIdsJson: nextSourceTemplateIds,
-                    inputDataJson: nextInputData,
-                    draftingPlanJson: nextDraftingPlan,
+                    sourceTemplateIdsJson: toNullableJsonInput(nextSourceTemplateIds),
+                    inputDataJson: toNullableJsonInput(nextInputData),
+                    draftingPlanJson: toNullableJsonInput(nextDraftingPlan),
                     draftMarkdown: nextDraftMarkdown,
                     draftHtml: nextDraftHtml,
                     createdByUserId: req.auth.userId,
@@ -1193,9 +1181,7 @@ draftingRouter.post("/documents/:id/fill-fields", async (req, res, next) => {
                     editorJson: toNullableJsonInput(null),
                     unresolvedPlaceholdersJson: toNullableJsonInput(unresolvedPlaceholders),
                     inputDataJson: toNullableJsonInput({
-                        ...(document.inputDataJson && typeof document.inputDataJson === "object"
-                            ? document.inputDataJson
-                            : {}),
+                        ...parseJsonField(document.inputDataJson, {}),
                         filledValues: values,
                     }),
                 },

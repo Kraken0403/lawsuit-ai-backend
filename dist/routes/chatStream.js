@@ -4,7 +4,8 @@ import { orchestrateSearch } from "../orchestrator/searchOrchestrator.js";
 import { composeAnswer } from "../answer/composeAnswer.js";
 import { extractUnresolvedPlaceholders } from "../drafting/placeholders.js";
 import { orchestrateDrafting } from "../drafting/orchestrateDrafting.js";
-import { toNullableJsonInput } from "../lib/prismaJson.js";
+// import { toNullableJsonInput } from "../lib/prismaJson.js";
+import { parseJsonField, toNullableJsonInput } from "../lib/prismaJson.js";
 import { optionalAuth, requireAuth, } from "../middleware/auth.js";
 import { deriveConversationTitle } from "../utils/auth.js";
 import { normalizeAllowedCourts, restrictSelectedCourtIds, } from "../utils/allowedCourts.js";
@@ -295,10 +296,11 @@ function normalizeDraftContextText(value) {
     return stripCodeFence(source) || source;
 }
 function extractFilledValuesFromInputData(inputDataJson) {
-    if (!inputDataJson || typeof inputDataJson !== "object" || Array.isArray(inputDataJson)) {
+    const parsed = parseJsonField(inputDataJson, {});
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         return {};
     }
-    const raw = inputDataJson.filledValues;
+    const raw = parsed.filledValues;
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
         return {};
     }
@@ -375,11 +377,7 @@ async function updateDraftDocumentFromDraftingResult(params) {
         select: { versionNumber: true },
     });
     const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
-    const previousInputData = existingDocument.inputDataJson &&
-        typeof existingDocument.inputDataJson === "object" &&
-        !Array.isArray(existingDocument.inputDataJson)
-        ? existingDocument.inputDataJson
-        : {};
+    const previousInputData = parseJsonField(existingDocument.inputDataJson, {});
     const updated = await prisma.$transaction(async (tx) => {
         const updatedDocument = await tx.draftDocument.update({
             where: { id: existingDocument.id },
@@ -745,9 +743,10 @@ function buildDraftingTrace(draftingResult, originalQuery) {
     };
 }
 function parseCaseDigests(jsonValue) {
-    if (!Array.isArray(jsonValue))
+    const parsed = parseJsonField(jsonValue, []);
+    if (!Array.isArray(parsed))
         return [];
-    return jsonValue
+    return parsed
         .map((item) => ({
         caseId: item?.caseId,
         title: compact(item?.title),
@@ -766,7 +765,7 @@ function buildTurnsFromDbMessages(dbMessages) {
             ? parseCaseDigests(message.caseDigestsJson)
             : undefined,
         trace: message.role === "ASSISTANT" && message.traceJson
-            ? message.traceJson
+            ? parseJsonField(message.traceJson, null)
             : null,
     }));
 }
@@ -894,7 +893,7 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
                 allowedCourtIdsJson: true,
             },
         });
-        const availableCourts = normalizeAllowedCourts(authUser?.allowedCourtIdsJson);
+        const availableCourts = normalizeAllowedCourts(parseJsonField(authUser?.allowedCourtIdsJson, []));
         const allowedCourtIds = availableCourts.map((item) => item.id);
         if (authUser?.authProvider === "casefinder_hs256" &&
             !allowedCourtIds.length) {
@@ -1066,9 +1065,9 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
                     conversationId: conversation.id,
                     role: "ASSISTANT",
                     content: answerText,
-                    sourcesJson: sources,
-                    caseDigestsJson: caseDigests,
-                    traceJson: trace,
+                    sourcesJson: toNullableJsonInput(sources),
+                    caseDigestsJson: toNullableJsonInput(caseDigests),
+                    traceJson: toNullableJsonInput(trace),
                 },
                 select: {
                     id: true,
@@ -1189,9 +1188,9 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
                     conversationId: conversation.id,
                     role: "ASSISTANT",
                     content: answerText,
-                    sourcesJson: [],
-                    caseDigestsJson: [],
-                    traceJson: trace,
+                    sourcesJson: toNullableJsonInput([]),
+                    caseDigestsJson: toNullableJsonInput([]),
+                    traceJson: toNullableJsonInput(trace),
                 },
                 select: {
                     id: true,
@@ -1315,9 +1314,9 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
                 conversationId: conversation.id,
                 role: "ASSISTANT",
                 content: answerText,
-                sourcesJson: sources,
-                caseDigestsJson: caseDigests,
-                traceJson: trace,
+                sourcesJson: toNullableJsonInput(sources),
+                caseDigestsJson: toNullableJsonInput(caseDigests),
+                traceJson: toNullableJsonInput(trace),
             },
             select: {
                 id: true,

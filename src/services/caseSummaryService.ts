@@ -4,7 +4,8 @@ import prisma from "../lib/prisma.js";
 import { fetchFullCaseFromQdrant } from "./qdrantCaseService.js";
 import { fetchFullCaseHtmlFromSql } from "./sqlCaseService.js";
 import { buildCanonicalCaseTextFromQdrant } from "./canonicalCaseText.js";
-
+// import { buildCanonicalCaseTextFromQdrant } from "./canonicalCaseText.js";
+import { parseJsonField, toJsonString } from "../lib/prismaJson.js";
 export type DetailedSummarySections = {
   overview: string;
   facts: string;
@@ -732,7 +733,7 @@ export async function getOrCreateDetailedCaseSummary(
           sourceHash: prepared.sourceHash,
           modelName: model,
           status: "ready",
-          sectionsJson: sections as unknown as object,
+          sectionsJson: toJsonString(sections),
           renderedMarkdown,
         },
       });
@@ -803,8 +804,10 @@ export async function streamDetailedCaseSummary(
           court: prepared.fullCase.court,
           dateOfDecision: prepared.fullCase.dateOfDecision,
         },
-        (existing.sectionsJson as unknown as DetailedSummarySections) ||
+        parseJsonField<DetailedSummarySections>(
+          existing.sectionsJson,
           emptyDetailedSummarySections()
+        )
       );
 
     for (const chunk of splitIntoStreamChunks(renderedMarkdown, 140)) {
@@ -881,7 +884,7 @@ export async function streamDetailedCaseSummary(
         sourceHash: prepared.sourceHash,
         modelName: model,
         status: "ready",
-        sectionsJson: parsedSections as unknown as object,
+        sectionsJson: toJsonString(parsedSections),
         renderedMarkdown,
       },
     });

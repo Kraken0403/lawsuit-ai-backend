@@ -1,13 +1,17 @@
 import "dotenv/config";
 import { PrismaClient } from "../generated/prisma/client.js";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaMssql } from "@prisma/adapter-mssql";
 const globalForPrisma = globalThis;
-const adapter = new PrismaMariaDb({
-    host: process.env.DATABASE_HOST,
+const adapter = new PrismaMssql({
+    server: process.env.DATABASE_HOST,
+    port: Number(process.env.DATABASE_PORT || 1433),
+    database: process.env.DATABASE_NAME,
     user: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
-    database: process.env.DATABASE_NAME,
-    connectionLimit: 5,
+    options: {
+        encrypt: process.env.SQL_ENCRYPT === "true",
+        trustServerCertificate: process.env.SQL_TRUST_SERVER_CERT === "true",
+    },
 });
 const prisma = globalForPrisma.prisma ??
     new PrismaClient({

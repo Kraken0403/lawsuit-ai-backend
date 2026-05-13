@@ -5,6 +5,7 @@ import { fetchFullCaseFromQdrant } from "../services/qdrantCaseService.js";
 import { fetchFullCaseHtmlFromSql } from "../services/sqlCaseService.js";
 import { getOrCreateDetailedCaseSummary, streamDetailedCaseSummary, } from "../services/caseSummaryService.js";
 import { askCaseOnlyChat, streamCaseOnlyChat, } from "../services/caseChatService.js";
+import { translateWithGoogleFree } from "../services/googleTranslateService.js";
 export const casesRouter = express.Router();
 casesRouter.use(optionalAuth);
 casesRouter.use(requireAuth);
@@ -232,6 +233,24 @@ casesRouter.post("/:caseId/chat", async (req, res, next) => {
         next(error);
     }
 });
+casesRouter.post("/:caseId/translate", async (req, res, next) => {
+    try {
+        const result = await translateWithGoogleFree({
+            text: req.body?.text,
+            targetLanguage: req.body?.targetLanguage,
+            sourceLanguage: req.body?.sourceLanguage || "auto",
+        });
+        res.status(200).json({
+            ok: true,
+            caseId: req.params.caseId,
+            provider: "google_translate_free_unofficial",
+            ...result,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 casesRouter.get("/:caseId/feedback", async (req, res, next) => {
     try {
         const caseId = req.params.caseId;
@@ -275,7 +294,7 @@ casesRouter.post("/:caseId/feedback", async (req, res, next) => {
         const caseId = req.params.caseId;
         const raw = req.body || {};
         const feedback = normalizeCaseFeedback(raw.feedback);
-        const fingerprint = normalizeOptionalString(raw.fingerprint, 100);
+        const fingerprint = normalizeOptionalString(raw.fingerprint, 1000);
         const comment = normalizeOptionalString(raw.comment, 200);
         const userMessageId = normalizeOptionalString(raw.userMessageId, 191);
         const assistantMessageId = normalizeOptionalString(raw.assistantMessageId, 191);

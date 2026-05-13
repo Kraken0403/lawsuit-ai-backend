@@ -1,4 +1,4 @@
-import prisma from "../lib/prisma.js";
+import prisma from "../lib/prismaold.js";
 import { normalizeText } from "../drafting/utils.js";
 
 type SeedTemplate = {

@@ -4,6 +4,7 @@ import { clearSessionCookie, createSessionToken, getSessionExpiryDate, hashPassw
 import { optionalAuth, requireAuth, } from "../middleware/auth.js";
 import { verifyHs256SsoToken } from "../services/ssoTokenService.js";
 import { normalizeAllowedCourts } from "../utils/allowedCourts.js";
+import { parseJsonField, toNullableJsonInput } from "../lib/prismaJson.js";
 export const authRouter = express.Router();
 const LOCAL_AUTH_DISABLED = process.env.DISABLE_LOCAL_AUTH !== "false";
 authRouter.get("/dev-sso-page", (req, res) => {
@@ -152,6 +153,7 @@ authRouter.post("/sso-login", async (req, res, next) => {
         const hasAiAccess = claims.hasAiAccess ?? true;
         const allowedCourtIds = claims.allowedCourtIds;
         const allowedCourtsPayload = claims.allowedCourts.length > 0 ? claims.allowedCourts : allowedCourtIds;
+        const allowedCourtsJson = toNullableJsonInput(allowedCourtsPayload);
         const fallbackEmail = email || null;
         const user = await prisma.$transaction(async (tx) => {
             const existingByExternal = await tx.user.findUnique({
@@ -168,7 +170,7 @@ authRouter.post("/sso-login", async (req, res, next) => {
                         name,
                         hasAiAccess,
                         subscriptionStatus,
-                        allowedCourtIdsJson: allowedCourtsPayload,
+                        allowedCourtIdsJson: allowedCourtsJson,
                     },
                     select: { id: true },
                 });
@@ -189,7 +191,7 @@ authRouter.post("/sso-login", async (req, res, next) => {
                             name,
                             hasAiAccess,
                             subscriptionStatus,
-                            allowedCourtIdsJson: allowedCourtsPayload,
+                            allowedCourtIdsJson: allowedCourtsJson,
                         },
                         select: { id: true },
                     });
@@ -210,7 +212,7 @@ authRouter.post("/sso-login", async (req, res, next) => {
                             name,
                             hasAiAccess,
                             subscriptionStatus,
-                            allowedCourtIdsJson: allowedCourtsPayload,
+                            allowedCourtIdsJson: allowedCourtsJson,
                         },
                         select: { id: true },
                     });
@@ -226,7 +228,7 @@ authRouter.post("/sso-login", async (req, res, next) => {
                     passwordHash: null,
                     hasAiAccess,
                     subscriptionStatus,
-                    allowedCourtIdsJson: allowedCourtsPayload,
+                    allowedCourtIdsJson: allowedCourtsJson,
                 },
                 select: { id: true },
             });
@@ -408,11 +410,13 @@ authRouter.get("/me", optionalAuth, requireAuth, async (req, res, next) => {
                 error: "Session is no longer valid.",
             });
         }
+        const allowedCourtsPayload = parseJsonField(user.allowedCourtIdsJson, []);
         res.status(200).json({
             ok: true,
             user: {
                 ...user,
-                allowedCourts: normalizeAllowedCourts(user.allowedCourtIdsJson),
+                allowedCourtIdsJson: allowedCourtsPayload,
+                allowedCourts: normalizeAllowedCourts(allowedCourtsPayload),
             },
         });
     }
