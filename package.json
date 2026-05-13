@@ -10,6 +10,7 @@
         "start:prod": "NODE_ENV=production node dist/server.js",
         "test-search": "tsx src/scripts/testSearch.ts",
         "test-answer": "tsx src/scripts/testAnswer.ts",
+        "test-sso": "tsx src/scripts/test-sso-token.js",
         "review:logs": "tsx scripts/reviewSearchLogs.ts",
         "eval:run": "tsx src/scripts/runEval.ts",
         "eval:seed": "tsx src/scripts/runEval.ts eval/cases.seed.json",
@@ -29,6 +30,7 @@
         "jsonwebtoken": "^9.0.3",
         "mssql": "^12.2.1",
         "multer": "^2.1.1",
+        "nodemailer": "^8.0.7",
         "openai": "^6.29.0",
         "playwright": "^1.59.1"
     },
@@ -40,6 +42,7 @@
         "@types/mssql": "^9.1.11",
         "@types/multer": "^2.1.0",
         "@types/node": "^22.10.1",
+        "@types/nodemailer": "^8.0.0",
         "prisma": "^7.5.0",
         "tsx": "^4.19.2",
         "typescript": "^5.7.2"

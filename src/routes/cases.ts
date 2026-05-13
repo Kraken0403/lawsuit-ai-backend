@@ -16,6 +16,8 @@ import {
   streamCaseOnlyChat,
 } from "../services/caseChatService.js";
 
+import { translateWithGoogleFree } from "../services/googleTranslateService.js";
+
 export const casesRouter = express.Router();
 
 casesRouter.use(optionalAuth);
@@ -311,6 +313,27 @@ casesRouter.post(
   }
 );
 
+casesRouter.post(
+  "/:caseId/translate",
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const result = await translateWithGoogleFree({
+        text: req.body?.text,
+        targetLanguage: req.body?.targetLanguage,
+        sourceLanguage: req.body?.sourceLanguage || "auto",
+      });
+
+      res.status(200).json({
+        ok: true,
+        caseId: req.params.caseId,
+        provider: "google_translate_free_unofficial",
+        ...result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 casesRouter.get(
   "/:caseId/feedback",
   async (req: AuthenticatedRequest, res, next) => {
@@ -366,7 +389,7 @@ casesRouter.post(
       const raw = req.body || {};
 
       const feedback = normalizeCaseFeedback(raw.feedback);
-      const fingerprint = normalizeOptionalString(raw.fingerprint, 100);
+      const fingerprint = normalizeOptionalString(raw.fingerprint, 1000);
       const comment = normalizeOptionalString(raw.comment, 200);
       const userMessageId = normalizeOptionalString(raw.userMessageId, 191);
       const assistantMessageId = normalizeOptionalString(
