@@ -19,7 +19,9 @@ function createHttpError(message: string, status = 400) {
 }
 
 function sleep(ms: number) {
-  return new Promise((resolve) => windowlessSetTimeout(resolve, ms));
+  return new Promise<void>((resolve) => {
+    windowlessSetTimeout(() => resolve(), ms);
+  });
 }
 
 function windowlessSetTimeout(resolve: () => void, ms: number) {
