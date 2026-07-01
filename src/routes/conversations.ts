@@ -1,5 +1,6 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
+import { parseJsonArray, parseJsonField } from "../lib/prismaJson.js";
 import {
   optionalAuth,
   requireAuth,
@@ -198,9 +199,9 @@ conversationsRouter.get("/:id/messages", async (req: AuthenticatedRequest, res, 
         id: message.id,
         role: message.role === "USER" ? "user" : "assistant",
         content: message.content,
-        sources: message.sourcesJson || [],
-        caseDigests: message.caseDigestsJson || [],
-        trace: message.traceJson || null,
+        sources: parseJsonArray(message.sourcesJson),
+        caseDigests: parseJsonArray(message.caseDigestsJson),
+        trace: parseJsonField<unknown>(message.traceJson, null),
         createdAt: message.createdAt,
       })),
     });

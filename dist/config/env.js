@@ -1,5 +1,4 @@
-import dotenv from "dotenv";
-dotenv.config();
+import "./loadEnv.js";
 function required(name) {
     const value = process.env[name];
     if (!value) {

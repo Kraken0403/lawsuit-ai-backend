@@ -1477,6 +1477,7 @@ chatStreamRouter.post(
           answerType: draftingResult.answerType,
           confidence: draftingResult.confidence,
           conversationId: conversation.id,
+          assistantMessageId: assistantMessage.id,
           draftDocumentId: savedDraftDocumentId,
         });
 
@@ -1560,6 +1561,7 @@ chatStreamRouter.post(
           answerType: "argument_scaffold",
           confidence: 0.35,
           conversationId: conversation.id,
+          assistantMessageId: assistantMessage.id,
         });
 
         return res.end();
@@ -1705,6 +1707,7 @@ chatStreamRouter.post(
         answerType: answer?.answerType,
         confidence: answer?.confidence,
         conversationId: conversation.id,
+        assistantMessageId: assistantMessage.id,
       });
 
       res.end();
@@ -1722,4 +1725,3 @@ chatStreamRouter.post(
     }
   }
 );
-

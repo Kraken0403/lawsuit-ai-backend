@@ -22,6 +22,16 @@ function normalizeCaseFeedback(value) {
     }
     return "INVALID";
 }
+function normalizeStoredCaseFeedback(value) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (normalized === "up" || normalized === "like") {
+        return "up";
+    }
+    if (normalized === "down" || normalized === "dislike") {
+        return "down";
+    }
+    return null;
+}
 function normalizeOptionalString(value, maxLength = 200) {
     if (value == null)
         return null;
@@ -275,7 +285,7 @@ casesRouter.get("/:caseId/feedback", async (req, res, next) => {
                     id: existing.id,
                     caseId: existing.caseId,
                     fingerprint: existing.fingerprint,
-                    feedback: existing.feedback,
+                    feedback: normalizeStoredCaseFeedback(existing.feedback),
                     comment: existing.comment || "",
                     userMessageId: existing.userMessageId,
                     assistantMessageId: existing.assistantMessageId,
@@ -295,7 +305,7 @@ casesRouter.post("/:caseId/feedback", async (req, res, next) => {
         const raw = req.body || {};
         const feedback = normalizeCaseFeedback(raw.feedback);
         const fingerprint = normalizeOptionalString(raw.fingerprint, 1000);
-        const comment = normalizeOptionalString(raw.comment, 200);
+        const comment = normalizeOptionalString(raw.comment, 1000);
         const userMessageId = normalizeOptionalString(raw.userMessageId, 191);
         const assistantMessageId = normalizeOptionalString(raw.assistantMessageId, 191);
         if (feedback === "INVALID") {
@@ -335,7 +345,7 @@ casesRouter.post("/:caseId/feedback", async (req, res, next) => {
             userId: req.auth.userId,
             caseId,
             fingerprint,
-            feedback: feedback || "up",
+            feedback: feedback || "comment",
             comment,
             userMessageId,
             assistantMessageId,
@@ -357,7 +367,7 @@ casesRouter.post("/:caseId/feedback", async (req, res, next) => {
                 id: saved.id,
                 caseId: saved.caseId,
                 fingerprint: saved.fingerprint,
-                feedback: saved.feedback,
+                feedback: normalizeStoredCaseFeedback(saved.feedback),
                 comment: saved.comment || "",
                 userMessageId: saved.userMessageId,
                 assistantMessageId: saved.assistantMessageId,

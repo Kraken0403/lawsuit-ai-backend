@@ -1150,6 +1150,7 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
                 answerType: draftingResult.answerType,
                 confidence: draftingResult.confidence,
                 conversationId: conversation.id,
+                assistantMessageId: assistantMessage.id,
                 draftDocumentId: savedDraftDocumentId,
             });
             return res.end();
@@ -1223,6 +1224,7 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
                 answerType: "argument_scaffold",
                 confidence: 0.35,
                 conversationId: conversation.id,
+                assistantMessageId: assistantMessage.id,
             });
             return res.end();
         }
@@ -1349,6 +1351,7 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
             answerType: answer?.answerType,
             confidence: answer?.confidence,
             conversationId: conversation.id,
+            assistantMessageId: assistantMessage.id,
         });
         res.end();
     }

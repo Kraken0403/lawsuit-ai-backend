@@ -1,5 +1,6 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
+import { parseJsonField, toNullableJsonInput } from "../lib/prismaJson.js";
 import {
   optionalAuth,
   requireAuth,
@@ -18,6 +19,16 @@ function getSingleParam(value: string | string[] | undefined): string | null {
 
 function makeFingerprint(title: string, citation: string) {
   return `${String(title || "").trim()}|${String(citation || "").trim()}`;
+}
+
+function serializeBookmark<T extends { payloadJson: unknown }>(bookmark: T) {
+  return {
+    ...bookmark,
+    payloadJson: parseJsonField<Record<string, unknown> | null>(
+      bookmark.payloadJson,
+      null
+    ),
+  };
 }
 
 bookmarksRouter.get("/cases", async (req: AuthenticatedRequest, res, next) => {
@@ -41,7 +52,7 @@ bookmarksRouter.get("/cases", async (req: AuthenticatedRequest, res, next) => {
 
     res.status(200).json({
       ok: true,
-      bookmarks,
+      bookmarks: bookmarks.map(serializeBookmark),
     });
   } catch (error) {
     next(error);
@@ -76,7 +87,7 @@ bookmarksRouter.post("/cases", async (req: AuthenticatedRequest, res, next) => {
       },
       update: {
         externalCaseId,
-        payloadJson: payload,
+        payloadJson: toNullableJsonInput(payload),
       },
       create: {
         userId: req.auth!.userId,
@@ -84,7 +95,7 @@ bookmarksRouter.post("/cases", async (req: AuthenticatedRequest, res, next) => {
         externalCaseId,
         title,
         citation,
-        payloadJson: payload,
+        payloadJson: toNullableJsonInput(payload),
       },
       select: {
         id: true,
@@ -98,7 +109,7 @@ bookmarksRouter.post("/cases", async (req: AuthenticatedRequest, res, next) => {
 
     res.status(201).json({
       ok: true,
-      bookmark,
+      bookmark: serializeBookmark(bookmark),
     });
   } catch (error) {
     next(error);

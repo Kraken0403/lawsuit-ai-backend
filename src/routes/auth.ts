@@ -191,90 +191,116 @@ authRouter.post("/sso-login", async (req, res, next) => {
     const allowedCourtsJson = toNullableJsonInput(allowedCourtsPayload);
     const fallbackEmail = email || null;
 
-    const user = await prisma.$transaction(async (tx) => {
-      const existingByExternal = await tx.user.findUnique({
+    const baseUserUpdate = {
+      authProvider: "casefinder_hs256",
+      username,
+      name,
+      hasAiAccess,
+      subscriptionStatus,
+      allowedCourtIdsJson: allowedCourtsJson,
+    };
+
+    async function findExistingSsoUser() {
+      const existingByExternal = await prisma.user.findUnique({
         where: { externalUserId },
         select: { id: true, email: true },
       });
 
       if (existingByExternal) {
-        return tx.user.update({
-          where: { id: existingByExternal.id },
+        return {
+          match: "external" as const,
+          id: existingByExternal.id,
+          email: existingByExternal.email,
+        };
+      }
+
+      if (username) {
+        const existingByUsername = await prisma.user.findFirst({
+          where: { username },
+          select: { id: true, email: true },
+        });
+
+        if (existingByUsername) {
+          return {
+            match: "username" as const,
+            id: existingByUsername.id,
+            email: existingByUsername.email,
+          };
+        }
+      }
+
+      if (fallbackEmail) {
+        const existingByEmail = await prisma.user.findUnique({
+          where: { email: fallbackEmail },
+          select: { id: true, email: true },
+        });
+
+        if (existingByEmail) {
+          return {
+            match: "email" as const,
+            id: existingByEmail.id,
+            email: existingByEmail.email,
+          };
+        }
+      }
+
+      return null;
+    }
+
+    async function upsertSsoUserWithoutTransaction() {
+      const existingUser = await findExistingSsoUser();
+
+      if (existingUser) {
+        return prisma.user.update({
+          where: { id: existingUser.id },
           data: {
-            authProvider: "casefinder_hs256",
-            username,
-            email: fallbackEmail ?? existingByExternal.email ?? null,
-            name,
-            hasAiAccess,
-            subscriptionStatus,
-            allowedCourtIdsJson: allowedCourtsJson,
+            ...baseUserUpdate,
+            externalUserId,
+            email:
+              existingUser.match === "external"
+                ? fallbackEmail ?? existingUser.email ?? null
+                : fallbackEmail,
           },
           select: { id: true },
         });
       }
 
-      if (username) {
-        const existingByUsername = await tx.user.findFirst({
-          where: { username },
+      try {
+        return await prisma.user.create({
+          data: {
+            externalUserId,
+            ...baseUserUpdate,
+            email: fallbackEmail,
+            passwordHash: null,
+          },
           select: { id: true },
         });
-
-        if (existingByUsername) {
-          return tx.user.update({
-            where: { id: existingByUsername.id },
-            data: {
-              externalUserId,
-              authProvider: "casefinder_hs256",
-              username,
-              email: fallbackEmail,
-              name,
-              hasAiAccess,
-              subscriptionStatus,
-              allowedCourtIdsJson: allowedCourtsJson,
-            },
-            select: { id: true },
-          });
+      } catch (error: any) {
+        if (error?.code !== "P2002") {
+          throw error;
         }
-      }
 
-      if (fallbackEmail) {
-        const existingByEmail = await tx.user.findUnique({
-          where: { email: fallbackEmail },
+        const existingAfterRace = await findExistingSsoUser();
+        if (!existingAfterRace) {
+          throw error;
+        }
+
+        return prisma.user.update({
+          where: { id: existingAfterRace.id },
+          data: {
+            ...baseUserUpdate,
+            externalUserId,
+            email:
+              existingAfterRace.match === "external"
+                ? fallbackEmail ?? existingAfterRace.email ?? null
+                : fallbackEmail,
+          },
           select: { id: true },
         });
-
-        if (existingByEmail) {
-          return tx.user.update({
-            where: { id: existingByEmail.id },
-            data: {
-              externalUserId,
-              authProvider: "casefinder_hs256",
-              username,
-              name,
-              hasAiAccess,
-              subscriptionStatus,
-              allowedCourtIdsJson: allowedCourtsJson,
-            },
-            select: { id: true },
-          });
-        }
       }
+    }
 
-      return tx.user.create({
-        data: {
-          externalUserId,
-          authProvider: "casefinder_hs256",
-          username,
-          email: fallbackEmail,
-          name,
-          passwordHash: null,
-          hasAiAccess,
-          subscriptionStatus,
-          allowedCourtIdsJson: allowedCourtsJson,
-        },
-        select: { id: true },
-      });
-    });
+    const user = await upsertSsoUserWithoutTransaction();
 
     await createUserSession(user.id, req, res);
 

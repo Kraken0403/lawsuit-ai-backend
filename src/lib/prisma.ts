@@ -1,22 +1,40 @@
-import "dotenv/config";
+import "../config/loadEnv.js";
 import { PrismaClient } from "../generated/prisma/client.js";
 import { PrismaMssql } from "@prisma/adapter-mssql";
+import {
+  buildMssqlConfig,
+  cleanConnectionString,
+  getMssqlSchema,
+} from "./mssqlConfig.js";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
-const adapter = new PrismaMssql({
-  server: process.env.DATABASE_HOST!,
-  port: Number(process.env.DATABASE_PORT || 1433),
-  database: process.env.DATABASE_NAME!,
-  user: process.env.DATABASE_USER!,
-  password: process.env.DATABASE_PASSWORD!,
-  options: {
-    encrypt: process.env.SQL_ENCRYPT === "true",
-    trustServerCertificate: process.env.SQL_TRUST_SERVER_CERT === "true",
-  },
-});
+function buildPrismaAdapter() {
+  const rawUrl = cleanConnectionString(process.env.DATABASE_URL);
+  const schema = getMssqlSchema();
+
+  if (!rawUrl) {
+    return new PrismaMssql(
+      buildMssqlConfig({
+        primaryPrefix: "DATABASE",
+        fallbackPrefix: "SQL",
+      }),
+      { schema }
+    );
+  }
+
+  if (!rawUrl.startsWith("sqlserver://")) {
+    throw new Error(
+      "Invalid DATABASE_URL. This backend now uses SQL Server only; use sqlserver://..."
+    );
+  }
+
+  return new PrismaMssql(rawUrl, { schema });
+}
+
+const adapter = buildPrismaAdapter();
 
 const prisma =
   globalForPrisma.prisma ??
