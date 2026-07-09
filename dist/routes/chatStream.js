@@ -773,8 +773,16 @@ chatStreamRouter.use(optionalAuth);
 chatStreamRouter.use(requireAuth);
 chatStreamRouter.post("/stream", async (req, res, next) => {
     let clientClosed = false;
+    let streamHeartbeat = null;
+    const stopStreamHeartbeat = () => {
+        if (streamHeartbeat) {
+            clearInterval(streamHeartbeat);
+            streamHeartbeat = null;
+        }
+    };
     const markClientClosed = () => {
         clientClosed = true;
+        stopStreamHeartbeat();
     };
     req.on("aborted", markClientClosed);
     req.on("error", markClientClosed);
@@ -782,7 +790,11 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
         if (!res.writableEnded) {
             markClientClosed();
         }
+        else {
+            stopStreamHeartbeat();
+        }
     });
+    res.on("finish", stopStreamHeartbeat);
     try {
         const fallbackQuery = compact(req.body?.query).slice(0, 1000);
         const providedConversationId = compact(req.body?.conversationId);
@@ -923,6 +935,18 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
         res.setHeader("Content-Encoding", "identity");
         res.flushHeaders?.();
         res.socket?.setNoDelay?.(true);
+        streamHeartbeat = setInterval(() => {
+            if (clientClosed || res.writableEnded || res.destroyed) {
+                stopStreamHeartbeat();
+                return;
+            }
+            writeEvent(res, {
+                type: "ping",
+                conversationId: conversation.id,
+                timestamp: Date.now(),
+            });
+        }, 10000);
+        streamHeartbeat.unref?.();
         if (refreshedCredits !== null) {
             writeEvent(res, {
                 type: "credits",
@@ -1356,13 +1380,20 @@ chatStreamRouter.post("/stream", async (req, res, next) => {
         res.end();
     }
     catch (error) {
+        stopStreamHeartbeat();
         if (res.headersSent) {
             console.error("Error after headers sent in /stream:", error);
             try {
+                writeEvent(res, {
+                    type: "error",
+                    message: error?.message ||
+                        "Stream failed while generating the response. Please try again.",
+                });
                 if (!res.writableEnded)
                     res.end();
             }
             catch (e) {
+                // ignore failed stream cleanup
             }
             return;
         }
