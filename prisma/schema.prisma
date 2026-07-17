@@ -31,6 +31,7 @@ model User {
   draftDocuments           DraftDocument[]
   draftAttachments         DraftAttachment[]
   suggestedCaseFeedbacks   SuggestedCaseFeedback[]
+  creditPurchases          CreditPurchase[]
 
   @@map("users")
 }
@@ -348,4 +349,26 @@ model DraftDocumentVersion {
   @@unique([draftDocumentId, versionNumber], map: "uq_draft_document_version")
   @@index([draftDocumentId, createdAt], map: "idx_draft_document_versions_doc_created")
   @@map("draft_document_versions")
+}
+
+
+model CreditPurchase {
+  id                 String    @id @default(cuid()) @db.VarChar(191)
+  userId             String    @map("user_id") @db.VarChar(191)
+  packageId          String    @map("package_id") @db.VarChar(40)
+  credits            Int
+  amountPaise        Int       @map("amount_paise")
+  currency           String    @default("INR") @db.VarChar(3)
+  razorpayOrderId    String    @unique @map("razorpay_order_id") @db.VarChar(100)
+  razorpayPaymentId  String?   @unique @map("razorpay_payment_id") @db.VarChar(100)
+  razorpaySignature  String?   @map("razorpay_signature") @db.VarChar(255)
+  status             String    @default("PENDING") @db.VarChar(32)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  completedAt        DateTime? @map("completed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId, status, createdAt])
+  @@map("credit_purchases")
 }

@@ -11,6 +11,7 @@ import { bookmarksRouter } from "./routes/bookmarks.js";
 import { casesRouter } from "./routes/cases.js";
 import { draftingRouter } from "./routes/drafting.js";
 import { feedbackRouter } from "./routes/feedback.js";
+import { creditsRouter } from "./routes/credits.js";
 import { getUploadsRoot } from "./lib/settingsAssetStorage.js";
 
 const app = express();
@@ -63,6 +64,7 @@ app.use("/api/chat", chatStreamRouter);
 app.use("/api/cases", casesRouter);
 app.use("/api/drafting", draftingRouter);
 app.use("/api/feedback", feedbackRouter);
+app.use("/api/credits", creditsRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
