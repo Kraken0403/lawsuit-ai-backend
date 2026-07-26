@@ -22,6 +22,7 @@ import { parseJsonField, toNullableJsonInput } from "../lib/prismaJson.js";
 export const authRouter = express.Router();
 
 const LOCAL_AUTH_DISABLED = process.env.DISABLE_LOCAL_AUTH !== "false";
+const DEFAULT_NEW_USER_CREDITS = 10;
 
 authRouter.get("/dev-sso-page", (req, res) => {
   if (process.env.NODE_ENV === "production") {
@@ -272,6 +273,7 @@ authRouter.post("/sso-login", async (req, res, next) => {
             ...baseUserUpdate,
             email: fallbackEmail,
             passwordHash: null,
+            creditsRemaining: DEFAULT_NEW_USER_CREDITS,
           },
           select: { id: true },
         });
@@ -374,6 +376,7 @@ authRouter.post("/register", async (req, res, next) => {
         name: name || null,
         passwordHash,
         authProvider: "local",
+        creditsRemaining: DEFAULT_NEW_USER_CREDITS,
       },
       select: {
         id: true,
