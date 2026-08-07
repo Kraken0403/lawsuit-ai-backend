@@ -1,4 +1,6 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
+import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 import {
   clearSessionCookie,
@@ -23,6 +25,14 @@ export const authRouter = express.Router();
 
 const LOCAL_AUTH_DISABLED = process.env.DISABLE_LOCAL_AUTH !== "false";
 const DEFAULT_NEW_USER_CREDITS = 10;
+const DEFAULT_DEV_SSO_USERNAME = "bhavya4397";
+const DEFAULT_DEV_SSO_PASSWORD = "2023";
+const DEV_SSO_ALLOWED_COURT_IDS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+  21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 49, 50, 51, 52, 53, 54, 55, 56,
+  57, 58, 59, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90,
+  91, 92, 93, 94, 96, 97, 98, 99, 100, 102, 103, 104,
+];
 
 authRouter.get("/dev-sso-page", (req, res) => {
   if (process.env.NODE_ENV === "production") {
@@ -58,16 +68,21 @@ authRouter.get("/dev-sso-page", (req, res) => {
       p {
         color: #475569;
       }
-      textarea {
-        width: 100%;
-        min-height: 260px;
-        border: 1px solid #cbd5e1;
-        border-radius: 12px;
-        padding: 12px;
-        font-family: monospace;
+      label {
+        display: block;
+        margin-top: 14px;
+        color: #334155;
         font-size: 13px;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 6px;
+        font-size: 14px;
         box-sizing: border-box;
-        resize: vertical;
       }
       button {
         margin-top: 16px;
@@ -97,11 +112,13 @@ authRouter.get("/dev-sso-page", (req, res) => {
   <body>
     <div class="wrap">
       <h1>Local SSO Login</h1>
-      <p>Paste the generated JWT below and submit it to the backend SSO route.</p>
+      <p>Sign in with the local development SSO account.</p>
 
-      <form method="POST" action="/api/auth/sso-login">
-        <textarea name="token" placeholder="Paste SSO JWT here"></textarea>
-        <br />
+      <form method="POST" action="/api/auth/dev-sso-login">
+        <label for="username">SSO ID</label>
+        <input id="username" name="username" value="bhavya4397" autocomplete="username" />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" />
         <button type="submit">Login with SSO</button>
       </form>
 
@@ -113,6 +130,66 @@ authRouter.get("/dev-sso-page", (req, res) => {
   </body>
 </html>
   `);
+});
+
+authRouter.post("/dev-sso-login", (req, res, next) => {
+  try {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).send("Not found");
+    }
+
+    const expectedUsername =
+      process.env.DEV_SSO_USERNAME || DEFAULT_DEV_SSO_USERNAME;
+    const expectedPassword =
+      process.env.DEV_SSO_PASSWORD || DEFAULT_DEV_SSO_PASSWORD;
+    const username = String(req.body?.username || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (username !== expectedUsername || password !== expectedPassword) {
+      return res.status(401).send("Invalid local SSO credentials.");
+    }
+
+    const secret = process.env.SSO_HS256_SECRET;
+    const issuer = process.env.SSO_JWT_ISSUER;
+    const audience = process.env.SSO_JWT_AUDIENCE;
+
+    if (!secret || !issuer || !audience) {
+      return res.status(503).send("Local SSO environment is not configured.");
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const token = jwt.sign(
+      {
+        sub: username,
+        username,
+        name: "Bhavya",
+        email: `${username}@localhost`,
+        allowedCourtIds: DEV_SSO_ALLOWED_COURT_IDS,
+        subscriptionStatus: "active",
+        hasAiAccess: true,
+        jti: randomUUID(),
+        nbf: now - 5,
+        exp: now + 10 * 60,
+        iss: issuer,
+        aud: audience,
+      },
+      secret,
+      {
+        algorithm: "HS256",
+        noTimestamp: true,
+      }
+    );
+
+    res.type("html").send(`<!doctype html>
+<html><body>
+  <form id="sso" method="POST" action="/api/auth/sso-login">
+    <input type="hidden" name="token" value="${token}" />
+  </form>
+  <script>document.getElementById("sso").submit();</script>
+</body></html>`);
+  } catch (error) {
+    next(error);
+  }
 });
 
 function getRequestIp(req: express.Request) {

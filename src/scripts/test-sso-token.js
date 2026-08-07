@@ -82,8 +82,8 @@ const allowedCourts = [
 
 const payload = {
   name: process.env.SSO_TEST_NAME || "LAWSUIT",
-  username: process.env.SSO_TEST_USERNAME || "akshar",
-  email: process.env.SSO_TEST_EMAIL || "shroffakshar@gmail.com",
+  username: process.env.SSO_TEST_USERNAME || "bhavya4397",
+  email: process.env.SSO_TEST_EMAIL || "bhavya4397@localhost",
   allowedCourtIds: JSON.stringify(allowedCourts),
   subscriptionStatus: process.env.SSO_TEST_SUBSCRIPTION_STATUS || "active",
   hasAiAccess: process.env.SSO_TEST_HAS_AI_ACCESS || "true",

@@ -69,6 +69,7 @@ function formatMetadataValue(value) {
 
 function buildDigest(group, summaryOverride, citationsOverride) {
   const firstChunk = group?.chunks?.[0];
+  const payload = firstChunk?.payload || {};
   const citations =
     citationsOverride && citationsOverride.length
       ? citationsOverride
@@ -81,6 +82,11 @@ function buildDigest(group, summaryOverride, citationsOverride) {
     title: group?.title,
     citation: group?.citation,
     summary: summaryOverride || truncate(firstChunk?.text || "No summary available."),
+    court: payload.court || payload.courtName || "",
+    dateOfDecision: payload.dateOfDecision || "",
+    equivalentCitations: Array.isArray(payload.equivalentCitations)
+      ? payload.equivalentCitations
+      : [],
     citations,
   };
 }
@@ -172,11 +178,17 @@ function uniqueCitations(citations) {
 function buildTopFiveDigests(groupedCases) {
   return (groupedCases || []).slice(0, 5).map((group) => {
     const bestChunk = group?.chunks?.[0];
+    const payload = bestChunk?.payload || {};
     return {
       caseId: group?.caseId,
       title: group?.title,
       citation: group?.citation,
       summary: truncate(bestChunk?.text || "No summary available.", 420),
+      court: payload.court || payload.courtName || "",
+      dateOfDecision: payload.dateOfDecision || "",
+      equivalentCitations: Array.isArray(payload.equivalentCitations)
+        ? payload.equivalentCitations
+        : [],
       citations: bestChunk ? [makeCitation(group, bestChunk)] : [],
     };
   });

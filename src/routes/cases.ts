@@ -5,7 +5,10 @@ import {
   requireAuth,
   type AuthenticatedRequest,
 } from "../middleware/auth.js";
-import { fetchFullCaseFromQdrant } from "../services/qdrantCaseService.js";
+import {
+  fetchCaseMetadataFromQdrant,
+  fetchFullCaseFromQdrant,
+} from "../services/qdrantCaseService.js";
 import { fetchFullCaseHtmlFromSql } from "../services/sqlCaseService.js";
 import {
   getOrCreateDetailedCaseSummary,
@@ -66,6 +69,33 @@ function normalizeOptionalString(value: unknown, maxLength = 200) {
   return normalized.slice(0, maxLength);
 }
 
+function qdrantTextAsCaseHtml(text: string) {
+  const escaped = String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  return `<div class="qdrant-case-fallback" style="white-space:pre-wrap">${escaped}</div>`;
+}
+
+casesRouter.get(
+  "/:caseId/metadata",
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const data = await fetchCaseMetadataFromQdrant(req.params.caseId);
+
+      res.status(200).json({
+        ok: true,
+        source: "qdrant",
+        case: data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 casesRouter.get(
   "/:caseId/qdrant",
   async (req: AuthenticatedRequest, res, next) => {
@@ -87,13 +117,28 @@ casesRouter.get(
   "/:caseId/sql",
   async (req: AuthenticatedRequest, res, next) => {
     try {
-      const data = await fetchFullCaseHtmlFromSql(req.params.caseId);
+      try {
+        const data = await fetchFullCaseHtmlFromSql(req.params.caseId);
 
-      res.status(200).json({
-        ok: true,
-        source: "sql",
-        case: data,
-      });
+        return res.status(200).json({
+          ok: true,
+          source: "sql",
+          case: data,
+        });
+      } catch {
+        const fallback = await fetchFullCaseFromQdrant(req.params.caseId);
+
+        return res.status(200).json({
+          ok: true,
+          source: "qdrant",
+          case: {
+            caseId: fallback.caseId,
+            ftype: "qdrant",
+            flag: null,
+            jtext: qdrantTextAsCaseHtml(fallback.fullText),
+          },
+        });
+      }
     } catch (error) {
       next(error);
     }

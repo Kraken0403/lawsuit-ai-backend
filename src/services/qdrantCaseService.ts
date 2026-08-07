@@ -34,6 +34,11 @@ export type QdrantFullCase = {
   fullText: string;
 };
 
+export type QdrantCaseMetadata = Omit<
+  QdrantFullCase,
+  "chunkCount" | "chunks" | "fullText"
+>;
+
 const QDRANT_URL = (process.env.QDRANT_URL || "").replace(/\/+$/, "");
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY || "";
 const COLLECTION = process.env.QDRANT_COLLECTION || "lawsuit_cases_hybrid";
@@ -142,6 +147,82 @@ async function scrollAllCasePoints(caseIdOrFileName: string | number) {
   return allPoints;
 }
 
+async function fetchFirstCasePoint(caseIdOrFileName: string | number) {
+  if (!QDRANT_URL) {
+    throw new Error("QDRANT_URL is not set.");
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (QDRANT_API_KEY) {
+    headers["api-key"] = QDRANT_API_KEY;
+  }
+
+  const response = await fetch(
+    `${QDRANT_URL}/collections/${COLLECTION}/points/scroll`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        filter: buildCaseFilter(caseIdOrFileName),
+        with_payload: true,
+        with_vector: false,
+        limit: 1,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Qdrant metadata fetch failed with status ${response.status}: ${text}`
+    );
+  }
+
+  const json = await response.json();
+  const point = json?.result?.points?.[0] as QdrantPoint | undefined;
+
+  if (!point?.payload) {
+    throw new Error(
+      `No Qdrant metadata found for caseId/fileName=${caseIdOrFileName}`
+    );
+  }
+
+  return point;
+}
+
+function buildCaseMetadata(
+  payload: Record<string, any>,
+  caseIdOrFileName: string | number
+): QdrantCaseMetadata {
+  return {
+    caseId: compact(payload.caseId) || String(caseIdOrFileName),
+    fileName: compact(payload.fileName) || String(caseIdOrFileName),
+    title: compact(payload.title),
+    citation: compact(payload.citation),
+    court: compact(payload.court),
+    dateOfDecision: compact(payload.dateOfDecision),
+    judges: toStringArray(payload.judges),
+    caseType: compact(payload.caseType),
+    caseNo: compact(payload.caseNo),
+    subject: compact(payload.subject),
+    actsReferred: toStringArray(payload.actsReferred),
+    finalDecision: compact(payload.finalDecision),
+    equivalentCitations: toStringArray(payload.equivalentCitations),
+    advocates: toStringArray(payload.advocates),
+    cited: toNullableNumber(payload.cited),
+  };
+}
+
+export async function fetchCaseMetadataFromQdrant(
+  caseIdOrFileName: string | number
+): Promise<QdrantCaseMetadata> {
+  const point = await fetchFirstCasePoint(caseIdOrFileName);
+  return buildCaseMetadata(point.payload || {}, caseIdOrFileName);
+}
+
 function dedupeAndSortChunks(points: QdrantPoint[]): FullCaseChunk[] {
   const seen = new Set<string>();
 
@@ -203,21 +284,7 @@ export async function fetchFullCaseFromQdrant(
   const payload = chunks[0].payload || {};
 
   return {
-    caseId: compact(payload.caseId) || String(caseIdOrFileName),
-    fileName: compact(payload.fileName) || String(caseIdOrFileName),
-    title: compact(payload.title),
-    citation: compact(payload.citation),
-    court: compact(payload.court),
-    dateOfDecision: compact(payload.dateOfDecision),
-    judges: toStringArray(payload.judges),
-    caseType: compact(payload.caseType),
-    caseNo: compact(payload.caseNo),
-    subject: compact(payload.subject),
-    actsReferred: toStringArray(payload.actsReferred),
-    finalDecision: compact(payload.finalDecision),
-    equivalentCitations: toStringArray(payload.equivalentCitations),
-    advocates: toStringArray(payload.advocates),
-    cited: toNullableNumber(payload.cited),
+    ...buildCaseMetadata(payload, caseIdOrFileName),
     chunkCount: chunks.length,
     chunks,
     fullText: chunks.map((chunk) => chunk.text).join("\n\n"),

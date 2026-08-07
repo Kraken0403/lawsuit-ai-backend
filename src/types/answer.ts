@@ -12,6 +12,9 @@ export type AnswerCitation = {
     title: string | null;
     citation: string | null;
     summary: string;
+    court?: string | null;
+    dateOfDecision?: string | null;
+    equivalentCitations?: string[];
     citations: AnswerCitation[];
   };
   

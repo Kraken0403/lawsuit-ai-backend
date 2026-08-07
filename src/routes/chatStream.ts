@@ -30,6 +30,9 @@ type CaseDigest = {
   title: string;
   citation: string;
   summary: string;
+  court?: string;
+  dateOfDecision?: string;
+  equivalentCitations?: string[];
 };
 
 type ChatTurn = {
@@ -973,6 +976,11 @@ function parseCaseDigests(jsonValue: unknown): CaseDigest[] {
       title: compact(item?.title),
       citation: compact(item?.citation),
       summary: compact(item?.summary),
+      court: compact(item?.court),
+      dateOfDecision: compact(item?.dateOfDecision),
+      equivalentCitations: Array.isArray(item?.equivalentCitations)
+        ? item.equivalentCitations.map(compact).filter(Boolean)
+        : [],
     }))
     .filter((item) => item.title || item.citation || item.summary);
 }
@@ -1660,6 +1668,11 @@ chatStreamRouter.post(
           title: d.title,
           citation: d.citation,
           summary: pickCaseDigestSummary(d, answerText),
+          court: compact(d.court),
+          dateOfDecision: compact(d.dateOfDecision),
+          equivalentCitations: Array.isArray(d.equivalentCitations)
+            ? d.equivalentCitations.map(compact).filter(Boolean)
+            : [],
         }));
 
       writeEvent(res, {

@@ -70,6 +70,18 @@ function emptyDetailedSummarySections(): DetailedSummarySections {
   };
 }
 
+function normalizeDetailedSummaryRecord<
+  T extends { sectionsJson: unknown }
+>(summary: T) {
+  return {
+    ...summary,
+    sectionsJson: parseJsonField<DetailedSummarySections>(
+      summary.sectionsJson,
+      emptyDetailedSummarySections()
+    ),
+  };
+}
+
 function buildSummarySchema() {
   return {
     name: "case_summary_detailed_v1",
@@ -653,9 +665,13 @@ async function prepareDetailedSummarySource(
 }
 
 export async function getLatestDetailedCaseSummary(caseId: string | number) {
-  return prisma.caseSummary.findFirst({
+  const normalizedCaseId = String(caseId);
+  const summary = await prisma.caseSummary.findFirst({
     where: {
-      caseId: String(caseId),
+      OR: [
+        { caseId: normalizedCaseId },
+        { fileName: normalizedCaseId },
+      ],
       summaryType: SUMMARY_TYPE,
       status: "ready",
     },
@@ -663,6 +679,8 @@ export async function getLatestDetailedCaseSummary(caseId: string | number) {
       updatedAt: "desc",
     },
   });
+
+  return summary ? normalizeDetailedSummaryRecord(summary) : null;
 }
 
 export async function getOrCreateDetailedCaseSummary(
@@ -679,6 +697,15 @@ export async function getOrCreateDetailedCaseSummary(
   }
 
   const job = (async () => {
+    const latest = await getLatestDetailedCaseSummary(caseId);
+
+    if (latest) {
+      return {
+        cached: true,
+        summary: latest,
+      };
+    }
+
     const prepared = await prepareDetailedSummarySource(caseId, options);
 
     const existing = await prisma.caseSummary.findFirst({
@@ -693,7 +720,7 @@ export async function getOrCreateDetailedCaseSummary(
     if (existing) {
       return {
         cached: true,
-        summary: existing,
+        summary: normalizeDetailedSummaryRecord(existing),
       };
     }
 
@@ -740,7 +767,7 @@ export async function getOrCreateDetailedCaseSummary(
 
       return {
         cached: false,
-        summary: saved,
+        summary: normalizeDetailedSummaryRecord(saved),
       };
     } catch (error: any) {
       if (error?.code === "P2002") {
@@ -756,7 +783,7 @@ export async function getOrCreateDetailedCaseSummary(
         if (concurrent) {
           return {
             cached: true,
-            summary: concurrent,
+            summary: normalizeDetailedSummaryRecord(concurrent),
           };
         }
       }
@@ -778,6 +805,25 @@ export async function streamDetailedCaseSummary(
   } | undefined,
   writeEvent: (event: DetailedSummaryStreamEvent) => void
 ) {
+  const latest = await getLatestDetailedCaseSummary(caseId);
+
+  if (latest) {
+    writeEvent({
+      type: "status",
+      phase: "Loading saved detailed summary",
+    });
+    writeEvent({
+      type: "done",
+      cached: true,
+      summary: latest,
+    });
+
+    return {
+      cached: true,
+      summary: latest,
+    };
+  }
+
   const prepared = await prepareDetailedSummarySource(caseId, options);
 
   const existing = await prisma.caseSummary.findFirst({
@@ -820,12 +866,12 @@ export async function streamDetailedCaseSummary(
     writeEvent({
       type: "done",
       cached: true,
-      summary: existing,
+      summary: normalizeDetailedSummaryRecord(existing),
     });
 
     return {
       cached: true,
-      summary: existing,
+      summary: normalizeDetailedSummaryRecord(existing),
     };
   }
 
@@ -892,12 +938,12 @@ export async function streamDetailedCaseSummary(
     writeEvent({
       type: "done",
       cached: false,
-      summary: saved,
+      summary: normalizeDetailedSummaryRecord(saved),
     });
 
     return {
       cached: false,
-      summary: saved,
+      summary: normalizeDetailedSummaryRecord(saved),
     };
   } catch (error: any) {
     if (error?.code === "P2002") {
@@ -914,12 +960,12 @@ export async function streamDetailedCaseSummary(
         writeEvent({
           type: "done",
           cached: true,
-          summary: concurrent,
+          summary: normalizeDetailedSummaryRecord(concurrent),
         });
 
         return {
           cached: true,
-          summary: concurrent,
+          summary: normalizeDetailedSummaryRecord(concurrent),
         };
       }
     }
