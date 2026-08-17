@@ -9,7 +9,10 @@ import {
   fetchCaseMetadataFromQdrant,
   fetchFullCaseFromQdrant,
 } from "../services/qdrantCaseService.js";
-import { fetchFullCaseHtmlFromSql } from "../services/sqlCaseService.js";
+import {
+  fetchCaseReferencesHtmlFromSql,
+  fetchFullCaseHtmlFromSql,
+} from "../services/sqlCaseService.js";
 import {
   getOrCreateDetailedCaseSummary,
   streamDetailedCaseSummary,
@@ -20,6 +23,11 @@ import {
 } from "../services/caseChatService.js";
 
 import { translateWithGoogleFree } from "../services/googleTranslateService.js";
+import {
+  buildCasePrintDocument,
+  exportCaseDocx,
+  exportCasePdf,
+} from "../services/caseExportService.js";
 
 export const casesRouter = express.Router();
 
@@ -69,16 +77,6 @@ function normalizeOptionalString(value: unknown, maxLength = 200) {
   return normalized.slice(0, maxLength);
 }
 
-function qdrantTextAsCaseHtml(text: string) {
-  const escaped = String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
-  return `<div class="qdrant-case-fallback" style="white-space:pre-wrap">${escaped}</div>`;
-}
-
 casesRouter.get(
   "/:caseId/metadata",
   async (req: AuthenticatedRequest, res, next) => {
@@ -90,6 +88,63 @@ casesRouter.get(
         source: "qdrant",
         case: data,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+casesRouter.post(
+  "/:caseId/export/pdf",
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const result = await exportCasePdf(
+        req.params.caseId,
+        req.auth!.userId,
+        req.body || {}
+      );
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", result.contentDisposition);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(200).send(result.buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+casesRouter.post(
+  "/:caseId/print",
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const result = await buildCasePrintDocument(
+        req.params.caseId,
+        req.auth!.userId,
+        req.body || {}
+      );
+
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+casesRouter.post(
+  "/:caseId/export/docx",
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const result = await exportCaseDocx(req.params.caseId, req.auth!.userId);
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      );
+      res.setHeader("Content-Disposition", result.contentDisposition);
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(200).send(result.buffer);
     } catch (error) {
       next(error);
     }
@@ -117,28 +172,30 @@ casesRouter.get(
   "/:caseId/sql",
   async (req: AuthenticatedRequest, res, next) => {
     try {
-      try {
-        const data = await fetchFullCaseHtmlFromSql(req.params.caseId);
+      const data = await fetchFullCaseHtmlFromSql(req.params.caseId);
 
-        return res.status(200).json({
-          ok: true,
-          source: "sql",
-          case: data,
-        });
-      } catch {
-        const fallback = await fetchFullCaseFromQdrant(req.params.caseId);
+      return res.status(200).json({
+        ok: true,
+        source: "sql",
+        case: data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
-        return res.status(200).json({
-          ok: true,
-          source: "qdrant",
-          case: {
-            caseId: fallback.caseId,
-            ftype: "qdrant",
-            flag: null,
-            jtext: qdrantTextAsCaseHtml(fallback.fullText),
-          },
-        });
-      }
+casesRouter.get(
+  "/:caseId/references",
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const data = await fetchCaseReferencesHtmlFromSql(req.params.caseId);
+
+      res.status(200).json({
+        ok: true,
+        source: "sql",
+        references: data,
+      });
     } catch (error) {
       next(error);
     }

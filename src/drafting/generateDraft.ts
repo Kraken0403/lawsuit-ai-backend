@@ -194,6 +194,9 @@ export async function generateDraftFromPlan(params: {
           "You are Drafting Studio, an expert Indian legal drafting assistant.",
           "Output clean markdown only.",
           "Do not output commentary before or after the draft.",
+          "Every draft must begin with a specific document title as the first Markdown H1, for example '# Special Civil Application'.",
+          "Never use a date, address, recipient, contact detail, placeholder, or generic text such as 'Untitled draft' as the document title.",
+          "Place the date, parties or addressee, subject, recitals, and body after the title in the conventional order for that document type.",
           "Do not invent facts, names, addresses, dates, amounts, courts, timelines, statutory references, or commercial terms.",
           "If any information is missing, keep explicit placeholders such as [ADD CLIENT ADDRESS] or preserve unresolved placeholders from the provided scaffold.",
           `The document family is locked to: ${plan.detectedFamily || "misc"}.`,
@@ -210,6 +213,7 @@ export async function generateDraftFromPlan(params: {
             ? [
                 "The PRIMARY TEMPLATE SCAFFOLD is controlling.",
                 "Preserve its heading order, structure, and overall drafting shape.",
+                "If the scaffold has no document title or begins with a date or addressee, insert the specific document-title H1 before the scaffold without otherwise reordering it.",
                 "Do not add major new headings or whole new sections unless the user explicitly requested them.",
                 "Start from the scaffold, fill what can be inferred from the user request, and lightly polish language without changing the structure.",
               ].join(" ")
