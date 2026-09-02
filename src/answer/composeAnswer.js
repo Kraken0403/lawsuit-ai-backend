@@ -1,5 +1,7 @@
 import { generateLlmAnswer } from "./llmAnswer.js";
 
+const DEBUG_ANSWER = process.env.DEBUG_SEARCH === "1";
+
 function compact(text) {
   return (text || "").replace(/\s+/g, " ").trim();
 }
@@ -601,7 +603,7 @@ function deriveConfidence(searchResult, llmText, groupedCases) {
   return Number(confidence.toFixed(2));
 }
 
-export async function composeAnswer(searchResult) {
+export async function composeAnswer(searchResult, options = {}) {
   const { query, mode } = searchResult;
   const originalGroupedCases = Array.isArray(searchResult.groupedCases)
     ? searchResult.groupedCases
@@ -626,7 +628,7 @@ export async function composeAnswer(searchResult) {
     return buildFullJudgmentAnswer(effectiveSearchResult);
   }
 
-  const llm = await generateLlmAnswer(effectiveSearchResult);
+  const llm = await generateLlmAnswer(effectiveSearchResult, options);
   const summary =
     llm?.text ||
     truncate(groupedCases?.[0]?.chunks?.[0]?.text || "No answer available.", 900);
@@ -636,9 +638,11 @@ export async function composeAnswer(searchResult) {
   const confidence = deriveConfidence(effectiveSearchResult, llm?.text, groupedCases);
   const suppressCaseCards = shouldSuppressCaseCards(effectiveSearchResult, llm?.text);
 
-  console.log("[composeAnswer] groupedCases:", groupedCases.length);
-  console.log("[composeAnswer] llmCitations:", llmCitations.length);
-  console.log("[composeAnswer] suppressCaseCards:", suppressCaseCards);
+  if (DEBUG_ANSWER) {
+    console.log("[composeAnswer] groupedCases:", groupedCases.length);
+    console.log("[composeAnswer] llmCitations:", llmCitations.length);
+    console.log("[composeAnswer] suppressCaseCards:", suppressCaseCards);
+  }
 
   if (groupedCases.length === 1) {
     const top = groupedCases[0];

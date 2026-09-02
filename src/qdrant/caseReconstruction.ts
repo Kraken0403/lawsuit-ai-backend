@@ -3,7 +3,38 @@ import { env } from "../config/env.js";
 import type { RawChunkHit } from "../types/search.js";
 
 const FULL_CASE_MAX_CHUNKS = Number.MAX_SAFE_INTEGER;
-const caseChunkCache = new Map<string, RawChunkHit[]>();
+const CASE_CACHE_TTL_MS = 10 * 60 * 1000;
+const CASE_CACHE_MAX_ENTRIES = 100;
+const caseChunkCache = new Map<
+  string,
+  { chunks: RawChunkHit[]; expiresAt: number }
+>();
+
+function getCachedChunks(key: string) {
+  const cached = caseChunkCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    caseChunkCache.delete(key);
+    return null;
+  }
+
+  caseChunkCache.delete(key);
+  caseChunkCache.set(key, cached);
+  return cached.chunks;
+}
+
+function cacheChunks(key: string, chunks: RawChunkHit[]) {
+  caseChunkCache.set(key, {
+    chunks,
+    expiresAt: Date.now() + CASE_CACHE_TTL_MS,
+  });
+
+  while (caseChunkCache.size > CASE_CACHE_MAX_ENTRIES) {
+    const oldestKey = caseChunkCache.keys().next().value;
+    if (oldestKey == null) break;
+    caseChunkCache.delete(oldestKey);
+  }
+}
 
 function buildCacheKey(caseId: number, maxChunks: number, pageSize: number): string {
   return `${caseId}:${maxChunks}:${pageSize}`;
@@ -66,13 +97,13 @@ async function fetchCaseChunks(
       : 250;
 
   const cacheKey = buildCacheKey(caseId, maxChunks, pageSize);
-  const cached = caseChunkCache.get(cacheKey);
+  const cached = getCachedChunks(cacheKey);
   if (cached) return cached;
 
-  const fullCached = caseChunkCache.get(getFullCaseCacheKey(caseId));
+  const fullCached = getCachedChunks(getFullCaseCacheKey(caseId));
   if (fullCached) {
     const sliced = fullCached.slice(0, maxChunks);
-    caseChunkCache.set(cacheKey, sliced);
+    cacheChunks(cacheKey, sliced);
     return sliced;
   }
 
@@ -124,10 +155,10 @@ async function fetchCaseChunks(
 
   const chunks = allPoints.map((point) => toChunkHit(caseId, point)).sort(sortChunks);
 
-  caseChunkCache.set(cacheKey, chunks);
+  cacheChunks(cacheKey, chunks);
 
   if (maxChunks === FULL_CASE_MAX_CHUNKS) {
-    caseChunkCache.set(getFullCaseCacheKey(caseId), chunks);
+    cacheChunks(getFullCaseCacheKey(caseId), chunks);
   }
 
   return chunks;

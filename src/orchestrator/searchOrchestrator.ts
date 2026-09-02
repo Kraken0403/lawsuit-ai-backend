@@ -41,6 +41,7 @@ const citationAliasClient = process.env.OPENAI_API_KEY
       ...(process.env.OPENAI_BASE_URL ? { baseURL: process.env.OPENAI_BASE_URL } : {}),
     })
   : null;
+const DEBUG_SEARCH = process.env.DEBUG_SEARCH === "1";
 
 function compact(text: string | null | undefined): string {
   return (text || "").replace(/\s+/g, " ").trim();
@@ -1186,45 +1187,43 @@ async function runHybridPath(
     )
   );
 
+  if (DEBUG_SEARCH) {
     console.log("[runHybridPath] hybridHits:", hybridHits.length);
-  console.log(
-    "[runHybridPath] firstHitMeta:",
-    hybridHits.slice(0, 3).map((hit) => ({
-      caseId: hit.caseId,
-      title: hit.title,
-      court: hit.payload?.court,
-      courtId: hit.payload?.courtId,
-      decisionDate: hit.payload?.decisionDate,
-      decisionYear: hit.payload?.decisionYear,
-      score: hit.score,
-    }))
-  );
-
-
-
-
+    console.log(
+      "[runHybridPath] firstHitMeta:",
+      hybridHits.slice(0, 3).map((hit) => ({
+        caseId: hit.caseId,
+        title: hit.title,
+        court: hit.payload?.court,
+        courtId: hit.payload?.courtId,
+        decisionDate: hit.payload?.decisionDate,
+        decisionYear: hit.payload?.decisionYear,
+        score: hit.score,
+      }))
+    );
+  }
   let groupedCases = groupHitsByCase(
     hybridHits,
     classified.intent === "latest_cases" ? 5 : 3,
     classified
   );
 
-  console.log("[runHybridPath] groupedCases:", groupedCases.length);
-  console.log(
-    "[runHybridPath] groupedMeta:",
-    groupedCases.slice(0, 5).map((group) => ({
-      caseId: group.caseId,
-      title: group.title,
-      bestScore: group.bestScore,
-      chunkCount: group.chunks?.length || 0,
-      courtId: group.chunks?.[0]?.payload?.courtId,
-      court: group.chunks?.[0]?.payload?.court,
-      decisionDate: group.chunks?.[0]?.payload?.decisionDate,
-      decisionYear: group.chunks?.[0]?.payload?.decisionYear,
-    }))
-  );
-
-
+  if (DEBUG_SEARCH) {
+    console.log("[runHybridPath] groupedCases:", groupedCases.length);
+    console.log(
+      "[runHybridPath] groupedMeta:",
+      groupedCases.slice(0, 5).map((group) => ({
+        caseId: group.caseId,
+        title: group.title,
+        bestScore: group.bestScore,
+        chunkCount: group.chunks?.length || 0,
+        courtId: group.chunks?.[0]?.payload?.courtId,
+        court: group.chunks?.[0]?.payload?.court,
+        decisionDate: group.chunks?.[0]?.payload?.decisionDate,
+        decisionYear: group.chunks?.[0]?.payload?.decisionYear,
+      }))
+    );
+  }
   let evidence: RawChunkHit[];
 
   if (classified.intent === "latest_cases") {

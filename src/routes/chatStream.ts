@@ -18,6 +18,7 @@ import {
 } from "../utils/allowedCourts.js";
 
 export const chatStreamRouter = express.Router();
+const DEBUG_DRAFTING = process.env.DEBUG_DRAFTING === "1";
 
 type SourceItem = {
   title: string;
@@ -628,18 +629,6 @@ function citationRange(c: {
   return `paras ${c.paragraphStart}-${c.paragraphEnd}`;
 }
 
-function chunkText(text: string, size = 6) {
-  const parts: string[] = [];
-  let i = 0;
-
-  while (i < text.length) {
-    parts.push(text.slice(i, i + size));
-    i += size;
-  }
-
-  return parts;
-}
-
 function compact(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -876,10 +865,6 @@ function simpleMarkdownToHtml(md: string) {
   return out;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function parseChatMode(
   value: unknown
 ): "JUDGMENT" | "DRAFTING_STUDIO" | "ARGUMENT" {
@@ -1018,6 +1003,8 @@ chatStreamRouter.use(requireAuth);
 chatStreamRouter.post(
   "/stream",
   async (req: AuthenticatedRequest, res, next) => {
+        const requestStartedAt = Date.now();
+        const timings: Record<string, number> = {};
         let clientClosed = false;
         let streamHeartbeat: ReturnType<typeof setInterval> | null = null;
 
@@ -1216,6 +1203,7 @@ chatStreamRouter.post(
       res.setHeader("Connection", "keep-alive");
       res.setHeader("X-Accel-Buffering", "no");
       res.setHeader("Content-Encoding", "identity");
+      timings.preflightMs = Date.now() - requestStartedAt;
       res.flushHeaders?.();
       res.socket?.setNoDelay?.(true);
 
@@ -1243,6 +1231,7 @@ chatStreamRouter.post(
       }
 
       if (activeChatMode === "DRAFTING_STUDIO") {
+        const draftingStartedAt = Date.now();
         const shouldSaveDraftDocument = req.body?.saveDraftDocument === true;
         const requestedDocumentTitle = compact(req.body?.documentTitle);
         const requestedDraftDocumentId = compact(req.body?.draftDocumentId);
@@ -1267,13 +1256,16 @@ chatStreamRouter.post(
           conversationId: conversation.id,
         });
 
-        console.log("[chatStream] req.body.attachmentIds:", req.body?.attachmentIds);
-        console.log("[chatStream] active draft context:", {
-          draftDocumentId: requestedDraftDocumentId || activeDraftDocument?.id || null,
-          hasCurrentDraftText: !!currentDraftText,
-          hasContext: !!currentDocumentContext?.draftText,
-          filledValues: Object.keys(currentDocumentContext?.filledValues || {}).length,
-        });
+        if (DEBUG_DRAFTING) {
+          console.log("[chatStream] req.body.attachmentIds:", req.body?.attachmentIds);
+          console.log("[chatStream] active draft context:", {
+            draftDocumentId:
+              requestedDraftDocumentId || activeDraftDocument?.id || null,
+            hasCurrentDraftText: !!currentDraftText,
+            hasContext: !!currentDocumentContext?.draftText,
+            filledValues: Object.keys(currentDocumentContext?.filledValues || {}).length,
+          });
+        }
 
         const draftingResult = await orchestrateDrafting({
           userId: req.auth!.userId,
@@ -1286,8 +1278,9 @@ chatStreamRouter.post(
             : [],
           currentDocumentContext,
         });
+        timings.draftingMs = Date.now() - draftingStartedAt;
 
-        try {
+        if (DEBUG_DRAFTING) {
           console.log("[chatStream] draftingResult.plan summary:", {
             detectedFamily: draftingResult.plan?.detectedFamily,
             strategy: draftingResult.plan?.strategy,
@@ -1308,11 +1301,6 @@ chatStreamRouter.post(
           console.log(
             "[chatStream] draftingResult.summary (excerpt):",
             String(draftingResult.summary || "").slice(0, 800)
-          );
-        } catch (err: any) {
-          console.error(
-            "[chatStream] failed to log draftingResult:",
-            err?.message || err
           );
         }
 
@@ -1389,17 +1377,11 @@ chatStreamRouter.post(
             conversationId: conversation.id,
           });
 
-          const chunks = chunkText(answerText, 6);
-
-          for (const part of chunks) {
-            if (clientClosed) return;
-            writeEvent(res, {
-              type: "delta",
-              text: part,
-              conversationId: conversation.id,
-            });
-            await sleep(20);
-          }
+          writeEvent(res, {
+            type: "delta",
+            text: answerText,
+            conversationId: conversation.id,
+          });
         }
 
         const assistantMessage = await prisma.message.create({
@@ -1442,8 +1424,9 @@ chatStreamRouter.post(
           );
         }
 
-        await prisma.promptRun.create({
-          data: {
+        await Promise.all([
+          prisma.promptRun.create({
+            data: {
             userId: req.auth!.userId,
             conversationId: conversation.id,
             userMessageId: userMessage.id,
@@ -1458,13 +1441,13 @@ chatStreamRouter.post(
             sourcesJson: toNullableJsonInput(sources),
             caseDigestsJson: toNullableJsonInput(caseDigests),
             confidence: draftingResult.confidence,
-          },
-        });
-
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { updatedAt: new Date() },
-        });
+            },
+          }),
+          prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() },
+          }),
+        ]);
 
         if (
           shouldSaveDraftDocument &&
@@ -1516,6 +1499,10 @@ chatStreamRouter.post(
           conversationId: conversation.id,
           assistantMessageId: assistantMessage.id,
           draftDocumentId: savedDraftDocumentId,
+          timings: {
+            ...timings,
+            totalMs: Date.now() - requestStartedAt,
+          },
         });
 
         return res.end();
@@ -1543,17 +1530,11 @@ chatStreamRouter.post(
           conversationId: conversation.id,
         });
 
-        const chunks = chunkText(answerText, 6);
-
-        for (const part of chunks) {
-          if (clientClosed) return;
-          writeEvent(res, {
-            type: "delta",
-            text: part,
-            conversationId: conversation.id,
-          });
-          await sleep(20);
-        }
+        writeEvent(res, {
+          type: "delta",
+          text: answerText,
+          conversationId: conversation.id,
+        });
 
         const assistantMessage = await prisma.message.create({
           data: {
@@ -1569,8 +1550,9 @@ chatStreamRouter.post(
           },
         });
 
-        await prisma.promptRun.create({
-          data: {
+        await Promise.all([
+          prisma.promptRun.create({
+            data: {
             userId: req.auth!.userId,
             conversationId: conversation.id,
             userMessageId: userMessage.id,
@@ -1585,13 +1567,13 @@ chatStreamRouter.post(
             sourcesJson: toNullableJsonInput([]),
             caseDigestsJson: toNullableJsonInput([]),
             confidence: 0.35,
-          },
-        });
-
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { updatedAt: new Date() },
-        });
+            },
+          }),
+          prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() },
+          }),
+        ]);
 
         writeEvent(res, {
           type: "done",
@@ -1599,6 +1581,10 @@ chatStreamRouter.post(
           confidence: 0.35,
           conversationId: conversation.id,
           assistantMessageId: assistantMessage.id,
+          timings: {
+            ...timings,
+            totalMs: Date.now() - requestStartedAt,
+          },
         });
 
         return res.end();
@@ -1610,12 +1596,14 @@ chatStreamRouter.post(
         conversationId: conversation.id,
       });
 
+      const searchStartedAt = Date.now();
       const searchResult = await orchestrateSearch({
         query,
         messages,
         allowedCourtIds,
         selectedCourtIds,
       });
+      timings.searchMs = Date.now() - searchStartedAt;
 
       if (clientClosed) return;
 
@@ -1644,10 +1632,36 @@ chatStreamRouter.post(
         conversationId: conversation.id,
       });
 
-      const answer = await composeAnswer({
-        ...searchResult,
-        messages,
-      });
+      const answerStartedAt = Date.now();
+      let answerStreamStarted = false;
+      const answer = await composeAnswer(
+        {
+          ...searchResult,
+          messages,
+        },
+        {
+          onDelta: (text: string) => {
+            if (clientClosed || !text) return;
+
+            if (!answerStreamStarted) {
+              answerStreamStarted = true;
+              writeEvent(res, {
+                type: "status",
+                phase: "Streaming answer",
+                trace,
+                conversationId: conversation.id,
+              });
+            }
+
+            writeEvent(res, {
+              type: "delta",
+              text,
+              conversationId: conversation.id,
+            });
+          },
+        }
+      );
+      timings.answerMs = Date.now() - answerStartedAt;
 
       if (clientClosed) return;
 
@@ -1684,7 +1698,7 @@ chatStreamRouter.post(
         conversationId: conversation.id,
       });
 
-      if (answerText) {
+      if (answerText && !answerStreamStarted) {
         writeEvent(res, {
           type: "status",
           phase: "Streaming answer",
@@ -1692,17 +1706,11 @@ chatStreamRouter.post(
           conversationId: conversation.id,
         });
 
-        const chunks = chunkText(answerText, 6);
-
-        for (const part of chunks) {
-          if (clientClosed) return;
-          writeEvent(res, {
-            type: "delta",
-            text: part,
-            conversationId: conversation.id,
-          });
-          await sleep(20);
-        }
+        writeEvent(res, {
+          type: "delta",
+          text: answerText,
+          conversationId: conversation.id,
+        });
       }
 
       const assistantMessage = await prisma.message.create({
@@ -1719,8 +1727,9 @@ chatStreamRouter.post(
         },
       });
 
-      await prisma.promptRun.create({
-        data: {
+      await Promise.all([
+        prisma.promptRun.create({
+          data: {
           userId: req.auth!.userId,
           conversationId: conversation.id,
           userMessageId: userMessage.id,
@@ -1736,13 +1745,13 @@ chatStreamRouter.post(
           caseDigestsJson: toNullableJsonInput(caseDigests),
           confidence:
             typeof answer?.confidence === "number" ? answer.confidence : null,
-        },
-      });
-
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() },
-      });
+          },
+        }),
+        prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { updatedAt: new Date() },
+        }),
+      ]);
 
       writeEvent(res, {
         type: "done",
@@ -1750,6 +1759,10 @@ chatStreamRouter.post(
         confidence: answer?.confidence,
         conversationId: conversation.id,
         assistantMessageId: assistantMessage.id,
+        timings: {
+          ...timings,
+          totalMs: Date.now() - requestStartedAt,
+        },
       });
 
       res.end();

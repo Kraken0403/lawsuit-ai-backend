@@ -5,6 +5,8 @@ import { buildClarifyingResponse } from "./questionnaire.js";
 import { generateDraftFromPlan } from "./generateDraft.js";
 import type { DraftingExecutionResult } from "./types.js";
 
+const DEBUG_DRAFTING = process.env.DEBUG_DRAFTING === "1";
+
 type CurrentDraftContext = {
   id?: string | null;
   title?: string | null;
@@ -36,13 +38,15 @@ export async function orchestrateDrafting({
     attachmentIds: cleanAttachmentIds,
   });
 
-  console.log("[drafting] attachmentIds:", cleanAttachmentIds);
+  if (DEBUG_DRAFTING) {
+    console.log("[drafting] attachmentIds:", cleanAttachmentIds);
     console.log("[drafting] loadedAttachments:", attachments.map((a) => ({
-    id: a.id,
-    fileName: a.fileName,
-    hasText: !!a.extractedText,
-    templateId: a.templateId,
+      id: a.id,
+      fileName: a.fileName,
+      hasText: !!a.extractedText,
+      templateId: a.templateId,
     })));
+  }
   const plan = await routeDraftingQuery({
     userId,
     query,
@@ -58,18 +62,21 @@ export async function orchestrateDrafting({
     })),
   });
 
-  // Log plan summary for debugging title/template selection
-  try {
+  if (DEBUG_DRAFTING) {
     console.log("[drafting] plan.summary", {
       resolvedQuery: plan.resolvedQuery,
       detectedFamily: plan.detectedFamily,
       strategy: plan.strategy,
       matchLevel: plan.matchLevel,
-      templateCandidates: plan.templateCandidates?.map((t: any) => ({ id: t.id, title: t.title, source: t.source, score: t.score })) || [],
+      templateCandidates:
+        plan.templateCandidates?.map((t) => ({
+          id: t.id,
+          title: t.title,
+          source: t.source,
+          score: t.score,
+        })) || [],
       extractedFactsKeys: Object.keys(plan.extractedFacts || {}),
     });
-  } catch (err: any) {
-    console.error("[drafting] failed to log plan:", err?.message || err);
   }
 
   const sources = plan.templateCandidates.slice(0, 3).map((item) => ({
@@ -101,11 +108,8 @@ export async function orchestrateDrafting({
     currentDocumentContext,
   });
 
-  // Log draft summary excerpt
-  try {
+  if (DEBUG_DRAFTING) {
     console.log("[drafting] generated summary (excerpt):", String(summary || "").slice(0, 800));
-  } catch (err: any) {
-    console.error("[drafting] failed to log summary:", err?.message || err);
   }
 
   return {

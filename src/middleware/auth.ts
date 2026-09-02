@@ -2,6 +2,8 @@ import type { NextFunction, Request, Response } from "express";
 import prisma from "../lib/prisma.js";
 import { hashSessionToken, SESSION_COOKIE_NAME } from "../utils/auth.js";
 
+const SESSION_TOUCH_INTERVAL_MS = 15 * 60 * 1000;
+
 export type AuthenticatedRequest = Request<Record<string, string>> & {
   auth?: {
     userId: string;
@@ -27,6 +29,7 @@ export async function optionalAuth(
         userId: true,
         expiresAt: true,
         revokedAt: true,
+        lastUsedAt: true,
       },
     });
 
@@ -39,12 +42,14 @@ export async function optionalAuth(
       sessionId: session.id,
     };
 
-    void prisma.session
-      .update({
-        where: { id: session.id },
-        data: { lastUsedAt: new Date() },
-      })
-      .catch(() => {});
+    if (session.lastUsedAt.getTime() < Date.now() - SESSION_TOUCH_INTERVAL_MS) {
+      void prisma.session
+        .update({
+          where: { id: session.id },
+          data: { lastUsedAt: new Date() },
+        })
+        .catch(() => {});
+    }
 
     next();
   } catch (error) {

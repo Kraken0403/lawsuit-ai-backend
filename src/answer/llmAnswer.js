@@ -6,6 +6,8 @@ import {
   citationFromChunk,
 } from "./caseEvidenceSelector.js";
 
+let answerClient = null;
+
 function getClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseURL = process.env.OPENAI_BASE_URL || process.env.LLM_BASE_URL || undefined;
@@ -15,10 +17,14 @@ function getClient() {
     return null;
   }
 
-  return new OpenAI({
-    apiKey,
-    ...(baseURL ? { baseURL } : {}),
-  });
+  if (!answerClient) {
+    answerClient = new OpenAI({
+      apiKey,
+      ...(baseURL ? { baseURL } : {}),
+    });
+  }
+
+  return answerClient;
 }
 
 function compact(text) {
@@ -117,10 +123,12 @@ function getReasoningConfig(model, searchResult) {
   return { effort: complex ? "medium" : "low" };
 }
 
-async function callText(client, { model, instructions, input, maxOutputTokens = 420, searchResult }) {
+async function callText(
+  client,
+  { model, instructions, input, maxOutputTokens = 420, searchResult, onDelta }
+) {
   const reasoning = getReasoningConfig(model, searchResult);
-
-  const response = await client.responses.create({
+  const request = {
     model,
     instructions,
     input,
@@ -132,7 +140,35 @@ async function callText(client, { model, instructions, input, maxOutputTokens = 
       },
     },
     store: false,
-  });
+  };
+
+  if (typeof onDelta === "function") {
+    const stream = await client.responses.create({
+      ...request,
+      stream: true,
+    });
+    let streamedText = "";
+    let completedResponse = null;
+
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta" && event.delta) {
+        streamedText += event.delta;
+        onDelta(event.delta);
+      } else if (event.type === "response.completed") {
+        completedResponse = event.response;
+      }
+    }
+
+    const text = streamedText || responseToText(completedResponse);
+    if (!text) {
+      console.warn("[llmAnswer] Stream completed without assistant text.");
+      return null;
+    }
+
+    return compact(text);
+  }
+
+  const response = await client.responses.create(request);
 
   const text = responseToText(response);
   if (!text) {
@@ -534,7 +570,7 @@ function sortGroupedCasesForLatest(groupedCases = []) {
   });
 }
 
-async function summarizeSingleCase(client, searchResult) {
+async function summarizeSingleCase(client, searchResult, onDelta) {
   const group = searchResult.groupedCases[0];
   const baseModel = process.env.OPENAI_ANSWER_MODEL || "gpt-4.1-mini";
   const finalModel = chooseFinalModel(searchResult);
@@ -614,6 +650,7 @@ async function summarizeSingleCase(client, searchResult) {
       .join("\n\n"),
     maxOutputTokens: 700,
     searchResult,
+    onDelta,
   });
 
   if (!finalText) return null;
@@ -651,9 +688,10 @@ function buildMultiCaseEvidenceText(searchResult) {
   return lines.join("\n");
 }
 
-export async function generateLlmAnswer(searchResult) {
+export async function generateLlmAnswer(searchResult, options = {}) {
   const client = getClient();
   if (!client) return null;
+  const onDelta = typeof options.onDelta === "function" ? options.onDelta : undefined;
 
   try {
     let groupedCases = reorderGroupedCasesFromTrace(
@@ -677,7 +715,7 @@ export async function generateLlmAnswer(searchResult) {
       effectiveSearchResult.groupedCases[0].chunks.length > 6;
 
     if (singleResolvedCase) {
-      const single = await summarizeSingleCase(client, effectiveSearchResult);
+      const single = await summarizeSingleCase(client, effectiveSearchResult, onDelta);
 
       if (single?.text) {
         return single;
@@ -700,6 +738,7 @@ export async function generateLlmAnswer(searchResult) {
         .join("\n\n"),
       maxOutputTokens: 800,
       searchResult: effectiveSearchResult,
+      onDelta,
     });
 
     if (!text) return null;
